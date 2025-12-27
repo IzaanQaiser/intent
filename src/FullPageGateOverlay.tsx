@@ -241,7 +241,9 @@ export default function FullPageGateOverlay({
                     <span className="intent-overlay__chip intent-overlay__chip--warn">
                       Watch Balance -{WATCH_COST_MIN}m
                     </span>
-                    <span className="intent-overlay__chip">New Watch Balance {balanceLabel}</span>
+                    <span className="intent-overlay__chip intent-overlay__chip--highlight">
+                      New Watch Balance {balanceLabel}
+                    </span>
                   </div>
                   {balanceAfterWatch < 0 ? (
                     <>

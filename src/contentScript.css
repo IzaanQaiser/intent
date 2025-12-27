@@ -183,6 +183,25 @@
   color: #4a1d1a;
 }
 
+.intent-overlay__chip--highlight {
+  position: relative;
+  background: linear-gradient(135deg, #f7b9b0, #f1a39a);
+  color: #4a1d1a;
+  border: 1px solid #b5423a;
+  box-shadow: 0 0 0 2px rgba(181, 66, 58, 0.18);
+  animation: intent-chip-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes intent-chip-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px rgba(181, 66, 58, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(181, 66, 58, 0.28);
+  }
+}
+
 .intent-overlay__choice-subline {
   font-size: 12px;
   margin-top: 6px;
