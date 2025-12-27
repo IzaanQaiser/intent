@@ -1,4 +1,4 @@
-# MVP Spec — Intentional Consumption
+# MVP Spec — Intent
 
 ## Problem
 

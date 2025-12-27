@@ -4,10 +4,10 @@ import { crx } from '@crxjs/vite-plugin';
 
 const manifest = {
   manifest_version: 3,
-  name: 'Intentional Consumption',
+  name: 'Intent',
   version: '0.0.1',
   description: 'Read-first YouTube summaries with attention-aware feedback.',
-  permissions: ['storage'],
+  permissions: ['storage', 'identity'],
   host_permissions: ['https://www.youtube.com/*'],
   content_scripts: [
     {
@@ -17,8 +17,19 @@ const manifest = {
     }
   ],
   action: {
-    default_title: 'Intentional Consumption'
-  }
+    default_title: 'Intent',
+    default_popup: 'popup.html'
+  },
+  background: {
+    service_worker: 'src/background.ts',
+    type: 'module'
+  },
+  web_accessible_resources: [
+    {
+      resources: ['auth.html'],
+      matches: ['<all_urls>']
+    }
+  ]
 };
 
 export default defineConfig({
@@ -27,7 +38,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: 'index.html',
-        auth: 'auth.html'
+        auth: 'auth.html',
+        popup: 'popup.html'
       }
     }
   }

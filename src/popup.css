@@ -1,0 +1,43 @@
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background: #fdf7f0;
+  color: #201b15;
+}
+
+.popup {
+  min-width: 220px;
+  padding: 16px;
+}
+
+.popup__title {
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+.popup__status {
+  font-size: 13px;
+  color: #5a4f46;
+  margin-bottom: 14px;
+}
+
+.popup__button {
+  width: 100%;
+  border: none;
+  border-radius: 999px;
+  padding: 10px 12px;
+  font-weight: 600;
+  background: #201b15;
+  color: #fdf7f0;
+  cursor: pointer;
+}
+
+.popup__button:disabled {
+  background: #6b6158;
+  cursor: default;
+}

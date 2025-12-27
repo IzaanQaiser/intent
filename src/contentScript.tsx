@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createClient, Session } from '@supabase/supabase-js';
+import { Session } from '@supabase/supabase-js';
 import './contentScript.css';
 import FullPageGateOverlay from './FullPageGateOverlay';
+import { supabase } from './supabaseClient';
 
 const CONTAINER_ID = 'intent-read-first-root';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8787';
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 type Metrics = {
   level: number;
@@ -82,6 +81,8 @@ function OverlayApp() {
   const [isVisible, setIsVisible] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [quoteIndex, setQuoteIndex] = useState(0);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authInProgress, setAuthInProgress] = useState(false);
   const [metrics, setMetrics] = useState<Metrics>({
     level: 1,
     readScore: 0,
@@ -89,12 +90,6 @@ function OverlayApp() {
   });
   const [session, setSession] = useState<Session | null>(null);
   const latestVideoId = useRef<string | null>(videoId);
-  const supabase = useMemo(() => {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-    return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: true, autoRefreshToken: true }
-    });
-  }, []);
   const quotes = useMemo(
     () => [
       'It is not enough to be busy; so are the ants. The question is: What are we busy about? — Henry David Thoreau',
@@ -151,11 +146,41 @@ function OverlayApp() {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
+      if (nextSession) {
+        setAuthInProgress(false);
+      }
     });
+    const handleMessage = (message: { type?: string }) => {
+      if (message?.type === 'auth_complete') {
+        supabase.auth.getSession().then(({ data }) => {
+          setSession(data.session);
+          if (data.session) {
+            void loadState();
+          }
+        });
+        setAuthInProgress(false);
+      }
+      if (message?.type === 'auth_signed_out') {
+        setSession(null);
+        setAuthInProgress(false);
+        setIsVisible(true);
+        setIsLoading(false);
+      }
+    };
+    chrome.runtime.onMessage.addListener(handleMessage);
     return () => {
       listener.subscription.unsubscribe();
+      chrome.runtime.onMessage.removeListener(handleMessage);
     };
-  }, [supabase]);
+  }, [supabase, loadState]);
+
+  useEffect(() => {
+    if (!supabase) {
+      setAuthError('Missing Supabase configuration.');
+    } else {
+      setAuthError(null);
+    }
+  }, []);
 
   useEffect(() => {
     if (!videoId || !session) return;
@@ -234,11 +259,31 @@ function OverlayApp() {
   }, [sendEvent, videoId, session]);
 
   const handleLogin = useCallback(async () => {
-    if (!supabase) return;
+    if (!supabase) {
+      setAuthError('Missing Supabase configuration.');
+      return;
+    }
+    setAuthInProgress(true);
     const redirectTo = chrome.runtime?.getURL('auth.html');
-    await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: redirectTo ? { redirectTo } : undefined
+      options: redirectTo ? { redirectTo, skipBrowserRedirect: true } : { skipBrowserRedirect: true }
+    });
+    if (error || !data?.url) {
+      setAuthError(error?.message || 'Failed to start sign-in.');
+      setAuthInProgress(false);
+      return;
+    }
+    chrome.runtime.sendMessage({ type: 'oauth_start', url: data.url }, (response) => {
+      if (chrome.runtime.lastError) {
+        setAuthError(chrome.runtime.lastError.message);
+        setAuthInProgress(false);
+        return;
+      }
+      if (!response?.ok) {
+        setAuthError(response?.error || 'OAuth failed.');
+        setAuthInProgress(false);
+      }
     });
   }, [supabase]);
 
@@ -249,6 +294,8 @@ function OverlayApp() {
       isVisible={isVisible}
       isLoading={isLoading}
       isAuthenticated={Boolean(session)}
+      authError={authError}
+      authInProgress={authInProgress}
       metrics={metrics}
       quote={quotes[quoteIndex]}
       onLogin={handleLogin}

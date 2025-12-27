@@ -1,17 +1,79 @@
 {
   "../../../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-CbKjMYbW.js",
+    "file": "assets/crx-manifest.js-sJ1Lj4QK.js",
     "name": "crx-manifest.js",
     "src": "../../../../../@crx/manifest",
     "isEntry": true
   },
+  "_client-DMp2t5-j.js": {
+    "file": "assets/client-DMp2t5-j.js",
+    "name": "client"
+  },
+  "_modulepreload-polyfill-B5Qt9EMX.js": {
+    "file": "assets/modulepreload-polyfill-B5Qt9EMX.js",
+    "name": "modulepreload-polyfill"
+  },
+  "_supabaseClient-CWLpkwh3.js": {
+    "file": "assets/supabaseClient-CWLpkwh3.js",
+    "name": "supabaseClient"
+  },
+  "auth.html": {
+    "file": "assets/auth-Cj4ai_q8.js",
+    "name": "auth",
+    "src": "auth.html",
+    "isEntry": true,
+    "imports": [
+      "_modulepreload-polyfill-B5Qt9EMX.js",
+      "_supabaseClient-CWLpkwh3.js"
+    ]
+  },
+  "contentScript.tsx-loader.js": {
+    "file": "assets/contentScript.tsx-loader-D4tLyPJS.js",
+    "src": "contentScript.tsx-loader.js"
+  },
+  "index.html": {
+    "file": "assets/main-BxZbMrPj.js",
+    "name": "main",
+    "src": "index.html",
+    "isEntry": true,
+    "imports": [
+      "_modulepreload-polyfill-B5Qt9EMX.js",
+      "_client-DMp2t5-j.js"
+    ],
+    "css": [
+      "assets/main-D6MC-h_p.css"
+    ]
+  },
+  "popup.html": {
+    "file": "assets/popup-nI-Z8Nmd.js",
+    "name": "popup",
+    "src": "popup.html",
+    "isEntry": true,
+    "imports": [
+      "_modulepreload-polyfill-B5Qt9EMX.js",
+      "_supabaseClient-CWLpkwh3.js"
+    ],
+    "css": [
+      "assets/popup-C7nCNhwQ.css"
+    ]
+  },
+  "src/background.ts": {
+    "file": "assets/background.ts-OrlJTFy-.js",
+    "name": "background.ts",
+    "src": "src/background.ts",
+    "isEntry": true
+  },
   "src/contentScript.tsx": {
-    "file": "assets/contentScript.tsx-CH2ULR5l.js",
+    "file": "assets/contentScript.tsx-BlkeDEuy.js",
     "name": "contentScript.tsx",
     "src": "src/contentScript.tsx",
     "isEntry": true,
+    "imports": [
+      "_client-DMp2t5-j.js",
+      "_supabaseClient-CWLpkwh3.js"
+    ],
     "css": [
-      "assets/contentScript-CO8TGqve.css"
+      "assets/contentScript-CeWOYZJP.css"
     ]
   }
 }

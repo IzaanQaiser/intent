@@ -90,7 +90,18 @@ app.get('/health', (_req, res) => {
 
 app.get('/state', async (req, res) => {
   try {
-    const userId = typeof req.query.userId === 'string' ? req.query.userId : 'demo';
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) {
+      res.status(401).json({ error: 'Missing auth token' });
+      return;
+    }
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data.user) {
+      res.status(401).json({ error: 'Invalid auth token' });
+      return;
+    }
+    const userId = data.user.id;
     const state = await getOrCreateState(userId);
     res.json({
       userId: state.userId,
@@ -105,9 +116,21 @@ app.get('/state', async (req, res) => {
 
 app.post('/event', async (req, res) => {
   try {
-    const { userId, type, data } = req.body || {};
-    if (!userId || !type) {
-      res.status(400).json({ error: 'Missing userId or type' });
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) {
+      res.status(401).json({ error: 'Missing auth token' });
+      return;
+    }
+    const { data: authData, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !authData.user) {
+      res.status(401).json({ error: 'Invalid auth token' });
+      return;
+    }
+    const userId = authData.user.id;
+    const { type, data } = req.body || {};
+    if (!type) {
+      res.status(400).json({ error: 'Missing type' });
       return;
     }
 

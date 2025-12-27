@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "Intentional Consumption",
+  "name": "Intent",
   "version": "0.0.1",
   "description": "Read-first YouTube summaries with attention-aware feedback.",
   "permissions": [
-    "storage"
+    "storage",
+    "identity"
   ],
   "host_permissions": [
     "https://www.youtube.com/*"
@@ -12,27 +13,43 @@
   "content_scripts": [
     {
       "js": [
-        "assets/contentScript.tsx-CH2ULR5l.js"
+        "assets/contentScript.tsx-loader-D4tLyPJS.js"
       ],
       "matches": [
         "https://www.youtube.com/watch*"
       ],
       "run_at": "document_idle",
       "css": [
-        "assets/contentScript-CO8TGqve.css"
+        "assets/contentScript-CeWOYZJP.css"
       ]
     }
   ],
   "action": {
-    "default_title": "Intentional Consumption"
+    "default_title": "Intent",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "service-worker-loader.js",
+    "type": "module"
   },
   "web_accessible_resources": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "resources": [
+        "auth.html"
+      ],
+      "use_dynamic_url": false
+    },
     {
       "matches": [
         "https://www.youtube.com/*"
       ],
       "resources": [
-        "assets/contentScript.tsx-CH2ULR5l.js"
+        "assets/client-DMp2t5-j.js",
+        "assets/supabaseClient-CWLpkwh3.js",
+        "assets/contentScript.tsx-BlkeDEuy.js"
       ],
       "use_dynamic_url": false
     }

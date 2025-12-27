@@ -11,6 +11,10 @@ type FullPageGateOverlayProps = {
   isLoading: boolean;
   metrics: Metrics;
   quote: string;
+  isAuthenticated: boolean;
+  authError: string | null;
+  authInProgress: boolean;
+  onLogin: () => void;
   onReadFirst: () => void;
   onWatchNow: () => void;
 };
@@ -25,6 +29,10 @@ export default function FullPageGateOverlay({
   isLoading,
   metrics,
   quote,
+  isAuthenticated,
+  authError,
+  authInProgress,
+  onLogin,
   onReadFirst,
   onWatchNow
 }: FullPageGateOverlayProps) {
@@ -162,7 +170,8 @@ export default function FullPageGateOverlay({
       <div className="intent-overlay__panel">
         <div className="intent-overlay__title">Read First</div>
         <div className="intent-overlay__subtitle">{quote}</div>
-        <div className="intent-overlay__metrics">
+        {isAuthenticated ? (
+          <div className="intent-overlay__metrics">
           <div className="intent-overlay__metric">
             <span className="intent-overlay__metric-label">Level</span>
             <span className="intent-overlay__metric-value">{currentLevel}</span>
@@ -178,89 +187,109 @@ export default function FullPageGateOverlay({
             </span>
           </div>
         </div>
-        <div className="intent-overlay__choice">
-          <div className="intent-overlay__choice-title">Your Choice</div>
-        <div className="intent-overlay__choice-grid">
-          <div className="intent-overlay__choice-card">
-            <div className="intent-overlay__choice-header">Read Instead</div>
-            <div className="intent-overlay__choice-chips">
-              <span className="intent-overlay__chip">Score +{READ_GAIN_SCORE}</span>
-              <span className="intent-overlay__chip">Watch Balance +{READ_GAIN_MIN}m</span>
-              <span className="intent-overlay__chip">
-                Level {levelAfterRead} {levelIndicator}
-              </span>
+        ) : (
+          <div className="intent-overlay__auth">
+            <div className="intent-overlay__auth-title">Sign in to continue</div>
+            <div className="intent-overlay__auth-copy">
+              Your score and balance sync to your account. Sign in to proceed.
             </div>
-            <div className="intent-overlay__choice-note">Reading restores progress.</div>
+            <button
+              className="intent-overlay__auth-button"
+              type="button"
+              onClick={onLogin}
+              disabled={authInProgress}
+            >
+              {authInProgress ? 'Authenticating…' : 'Sign in with Google'}
+            </button>
           </div>
-          <div className="intent-overlay__choice-card intent-overlay__choice-card--watch">
-            <div className="intent-overlay__choice-header">Watch Now</div>
-            <div className="intent-overlay__choice-chips">
-              <span className="intent-overlay__chip intent-overlay__chip--warn">
-                Watch Balance -{WATCH_COST_MIN}m
-              </span>
-              <span className="intent-overlay__chip">New Watch Balance {balanceLabel}</span>
-            </div>
-            {balanceAfterWatch < 0 ? (
-              <>
-                <div className="intent-overlay__choice-subline">
-                  Score penalty -{SCORE_PENALTY} (attention debt)
-                </div>
-                <div className="intent-overlay__choice-subline">
-                  Level progress paused while negative
-                </div>
-                {levelAfterPenalty < currentLevel ? (
-                  <div className="intent-overlay__choice-warning">
-                    ⚠️ Risk: Level down to {levelAfterPenalty}
+        )}
+        {isAuthenticated ? (
+          <>
+            <div className="intent-overlay__choice">
+              <div className="intent-overlay__choice-title">Your Choice</div>
+              <div className="intent-overlay__choice-grid">
+                <div className="intent-overlay__choice-card">
+                  <div className="intent-overlay__choice-header">Read Instead</div>
+                  <div className="intent-overlay__choice-chips">
+                    <span className="intent-overlay__chip">Score +{READ_GAIN_SCORE}</span>
+                    <span className="intent-overlay__chip">Watch Balance +{READ_GAIN_MIN}m</span>
+                    <span className="intent-overlay__chip">
+                      Level {levelAfterRead} {levelIndicator}
+                    </span>
                   </div>
-                ) : null}
-              </>
-            ) : (
-              <div className="intent-overlay__choice-subline">
-                No score penalty (balance stays non-negative)
+                  <div className="intent-overlay__choice-note">Reading restores progress.</div>
+                </div>
+                <div className="intent-overlay__choice-card intent-overlay__choice-card--watch">
+                  <div className="intent-overlay__choice-header">Watch Now</div>
+                  <div className="intent-overlay__choice-chips">
+                    <span className="intent-overlay__chip intent-overlay__chip--warn">
+                      Watch Balance -{WATCH_COST_MIN}m
+                    </span>
+                    <span className="intent-overlay__chip">New Watch Balance {balanceLabel}</span>
+                  </div>
+                  {balanceAfterWatch < 0 ? (
+                    <>
+                      <div className="intent-overlay__choice-subline">
+                        Score penalty -{SCORE_PENALTY} (attention debt)
+                      </div>
+                      <div className="intent-overlay__choice-subline">
+                        Level progress paused while negative
+                      </div>
+                      {levelAfterPenalty < currentLevel ? (
+                        <div className="intent-overlay__choice-warning">
+                          ⚠️ Risk: Level down to {levelAfterPenalty}
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <div className="intent-overlay__choice-subline">
+                      No score penalty (balance stays non-negative)
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-        </div>
-        </div>
-        <div className="intent-overlay__actions">
-          <button
-            className="intent-overlay__primary"
-            type="button"
-            onClick={onReadFirst}
-            disabled={isLoading}
-          >
-            {isLoading ? 'Generating summary…' : 'Read Instead'}
-          </button>
-          <button
-            className="intent-overlay__secondary"
-            type="button"
-            onPointerDown={startHold}
-            onPointerUp={stopHold}
-            onPointerLeave={stopHold}
-            onPointerCancel={stopHold}
-            ref={buttonRef}
-          >
-            <span
-              className="intent-overlay__hold-fill"
-              style={{ transform: `scaleX(${holdProgress})` }}
-            />
-            <span className="intent-overlay__button-label intent-overlay__button-label--progress">
-              <span ref={labelRef} className="intent-overlay__button-label-base">
-                Watch Now
-              </span>
-              <span
-                className="intent-overlay__button-label-fill"
-                style={{ ['--label-fill-px' as string]: `${labelFillPx}px` }}
+            </div>
+            <div className="intent-overlay__actions">
+              <button
+                className="intent-overlay__primary"
+                type="button"
+                onClick={onReadFirst}
+                disabled={isLoading}
               >
-                Watch Now
-              </span>
-            </span>
-          </button>
-        </div>
-        {isLoading ? (
-          <div className="intent-overlay__loading">
-            Preparing a focused summary and key points…
-          </div>
+                {isLoading ? 'Generating summary…' : 'Read Instead'}
+              </button>
+              <button
+                className="intent-overlay__secondary"
+                type="button"
+                onPointerDown={startHold}
+                onPointerUp={stopHold}
+                onPointerLeave={stopHold}
+                onPointerCancel={stopHold}
+                ref={buttonRef}
+              >
+                <span
+                  className="intent-overlay__hold-fill"
+                  style={{ transform: `scaleX(${holdProgress})` }}
+                />
+                <span className="intent-overlay__button-label intent-overlay__button-label--progress">
+                  <span ref={labelRef} className="intent-overlay__button-label-base">
+                    Watch Now
+                  </span>
+                  <span
+                    className="intent-overlay__button-label-fill"
+                    style={{ ['--label-fill-px' as string]: `${labelFillPx}px` }}
+                  >
+                    Watch Now
+                  </span>
+                </span>
+              </button>
+            </div>
+            {isLoading ? (
+              <div className="intent-overlay__loading">
+                Preparing a focused summary and key points…
+              </div>
+            ) : null}
+          </>
         ) : null}
       </div>
     </div>
