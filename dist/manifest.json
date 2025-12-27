@@ -12,14 +12,14 @@
   "content_scripts": [
     {
       "js": [
-        "assets/contentScript.tsx-4mu-tEwv.js"
+        "assets/contentScript.tsx-B3GOMDw4.js"
       ],
       "matches": [
         "https://www.youtube.com/watch*"
       ],
       "run_at": "document_idle",
       "css": [
-        "assets/contentScript-zRTkbt8a.css"
+        "assets/contentScript---gjK6Ky.css"
       ]
     }
   ],
@@ -32,7 +32,7 @@
         "https://www.youtube.com/*"
       ],
       "resources": [
-        "assets/contentScript.tsx-4mu-tEwv.js"
+        "assets/contentScript.tsx-B3GOMDw4.js"
       ],
       "use_dynamic_url": false
     }
