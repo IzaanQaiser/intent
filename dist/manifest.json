@@ -13,7 +13,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/contentScript.tsx-loader-D4tLyPJS.js"
+        "assets/contentScript.tsx-loader-CaHrH9Fw.js"
       ],
       "matches": [
         "https://www.youtube.com/watch*"
@@ -49,7 +49,7 @@
       "resources": [
         "assets/client-DMp2t5-j.js",
         "assets/supabaseClient-CWLpkwh3.js",
-        "assets/contentScript.tsx-BlkeDEuy.js"
+        "assets/contentScript.tsx-C2vXbDGA.js"
       ],
       "use_dynamic_url": false
     }

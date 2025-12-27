@@ -126,6 +126,7 @@ export default function FullPageGateOverlay({
   }, [isVisible, stopHold]);
 
   useLayoutEffect(() => {
+    if (!isAuthenticated) return;
     const measure = () => {
       const button = buttonRef.current;
       const label = labelRef.current;
@@ -148,7 +149,7 @@ export default function FullPageGateOverlay({
       observer.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, []);
+  }, [isAuthenticated]);
 
   const currentLevel = Math.floor(metrics.readScore / 400) + 1;
   const levelAfterRead = Math.floor((metrics.readScore + READ_GAIN_SCORE) / 400) + 1;
