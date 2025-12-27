@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Intentional Consumption",
+  "version": "0.0.1",
+  "description": "Read-first YouTube summaries with attention-aware feedback.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*"
+  ],
+  "content_scripts": [
+    {
+      "js": [
+        "assets/contentScript.tsx-4mu-tEwv.js"
+      ],
+      "matches": [
+        "https://www.youtube.com/watch*"
+      ],
+      "run_at": "document_idle",
+      "css": [
+        "assets/contentScript-zRTkbt8a.css"
+      ]
+    }
+  ],
+  "action": {
+    "default_title": "Intentional Consumption"
+  },
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "resources": [
+        "assets/contentScript.tsx-4mu-tEwv.js"
+      ],
+      "use_dynamic_url": false
+    }
+  ]
+}
