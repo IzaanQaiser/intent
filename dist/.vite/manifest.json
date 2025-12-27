@@ -6,12 +6,12 @@
     "isEntry": true
   },
   "src/contentScript.tsx": {
-    "file": "assets/contentScript.tsx-B3GOMDw4.js",
+    "file": "assets/contentScript.tsx-CH2ULR5l.js",
     "name": "contentScript.tsx",
     "src": "src/contentScript.tsx",
     "isEntry": true,
     "css": [
-      "assets/contentScript---gjK6Ky.css"
+      "assets/contentScript-CO8TGqve.css"
     ]
   }
 }

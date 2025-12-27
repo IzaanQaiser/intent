@@ -36,30 +36,66 @@ export default function FullPageGateOverlay({
   const holdStartRef = useRef<number | null>(null);
   const holdFrameRef = useRef<number | null>(null);
   const holdTriggeredRef = useRef(false);
+  const releaseFrameRef = useRef<number | null>(null);
+  const progressRef = useRef(0);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const labelRef = useRef<HTMLSpanElement | null>(null);
   const HOLD_DURATION_MS = 5000;
+  const BOOST_DURATION_MS = 120;
+  const RELEASE_DURATION_MS = 140;
 
   const stopHold = useCallback(() => {
     if (holdFrameRef.current !== null) {
       cancelAnimationFrame(holdFrameRef.current);
       holdFrameRef.current = null;
     }
+    if (releaseFrameRef.current !== null) {
+      cancelAnimationFrame(releaseFrameRef.current);
+      releaseFrameRef.current = null;
+    }
     holdStartRef.current = null;
     holdTriggeredRef.current = false;
-    setHoldProgress(0);
+    const startProgress = progressRef.current;
+    if (startProgress <= 0) {
+      setHoldProgress(0);
+      return;
+    }
+    const releaseStart = performance.now();
+    const releaseTick = (now: number) => {
+      const elapsed = now - releaseStart;
+      const t = Math.min(elapsed / RELEASE_DURATION_MS, 1);
+      const nextProgress = startProgress * (1 - t);
+      setHoldProgress(nextProgress);
+      if (t >= 1) {
+        releaseFrameRef.current = null;
+        return;
+      }
+      releaseFrameRef.current = requestAnimationFrame(releaseTick);
+    };
+    releaseFrameRef.current = requestAnimationFrame(releaseTick);
   }, []);
 
   const startHold = useCallback(() => {
     const now = performance.now();
-    holdStartRef.current = now - HOLD_DURATION_MS * 0.1;
+    holdStartRef.current = now;
     holdTriggeredRef.current = false;
-    setHoldProgress(0.1);
+    if (releaseFrameRef.current !== null) {
+      cancelAnimationFrame(releaseFrameRef.current);
+      releaseFrameRef.current = null;
+    }
+    setHoldProgress(0);
 
     const tick = (now: number) => {
       if (holdStartRef.current === null) return;
       const elapsed = now - holdStartRef.current;
-      const progress = Math.min(elapsed / HOLD_DURATION_MS, 1);
+      let progress = 0;
+      if (elapsed <= BOOST_DURATION_MS) {
+        progress = (elapsed / BOOST_DURATION_MS) * 0.1;
+      } else {
+        const remainingElapsed = elapsed - BOOST_DURATION_MS;
+        const remainingDuration = HOLD_DURATION_MS - BOOST_DURATION_MS;
+        progress = 0.1 + Math.min(remainingElapsed / remainingDuration, 1) * 0.9;
+      }
       setHoldProgress(progress);
       if (progress >= 1 && !holdTriggeredRef.current) {
         holdTriggeredRef.current = true;
@@ -72,6 +108,10 @@ export default function FullPageGateOverlay({
 
     holdFrameRef.current = requestAnimationFrame(tick);
   }, [onWatchNow, stopHold]);
+
+  useEffect(() => {
+    progressRef.current = holdProgress;
+  }, [holdProgress]);
 
   useEffect(() => {
     if (!isVisible) stopHold();
@@ -115,7 +155,7 @@ export default function FullPageGateOverlay({
     0,
     Math.min(labelMetrics.width, fillWidth - labelMetrics.left)
   );
-  const labelFillPx = Math.max(0, Math.round(labelFillWidth));
+  const labelFillPx = Math.max(0, labelFillWidth);
 
   return (
     <div className="intent-overlay">
@@ -202,7 +242,7 @@ export default function FullPageGateOverlay({
           >
             <span
               className="intent-overlay__hold-fill"
-              style={{ width: `${Math.round(holdProgress * 100)}%` }}
+              style={{ transform: `scaleX(${holdProgress})` }}
             />
             <span className="intent-overlay__button-label intent-overlay__button-label--progress">
               <span ref={labelRef} className="intent-overlay__button-label-base">

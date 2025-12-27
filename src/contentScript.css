@@ -212,9 +212,11 @@
 .intent-overlay__hold-fill {
   position: absolute;
   inset: 0;
-  width: 0%;
+  width: 100%;
   background: #e53935;
-  transition: width 0.08s linear;
+  transform: scaleX(0);
+  transform-origin: left;
+  will-change: transform;
   z-index: 0;
 }
 
