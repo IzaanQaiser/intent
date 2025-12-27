@@ -7,6 +7,12 @@ import { supabase } from './supabaseClient';
 
 const CONTAINER_ID = 'intent-read-first-root';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8787';
+const READ_GAIN_SCORE = 40;
+const READ_GAIN_MIN = 5;
+const WATCH_COST_MIN = 10;
+const SCORE_PENALTY = 10;
+
+const computeLevel = (readScore: number) => Math.floor(readScore / 400) + 1;
 
 type Metrics = {
   level: number;
@@ -87,13 +93,10 @@ function OverlayApp() {
   const [quoteIndex, setQuoteIndex] = useState(0);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authInProgress, setAuthInProgress] = useState(false);
-  const [metrics, setMetrics] = useState<Metrics>({
-    level: 1,
-    readScore: 0,
-    watchBalanceMinutes: 0
-  });
+  const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const latestVideoId = useRef<string | null>(videoId);
+  const loadStateRef = useRef<() => Promise<boolean>>(async () => false);
   const quotes = useMemo(
     () => [
       'It is not enough to be busy; so are the ants. The question is: What are we busy about? — Henry David Thoreau',
@@ -113,16 +116,69 @@ function OverlayApp() {
           resolve({ ok: false, error: 'Extension runtime unavailable.' });
           return;
         }
-        chrome.runtime.sendMessage({ type: 'api_request', url, init }, (response) => {
-          if (chrome.runtime.lastError) {
-            resolve({ ok: false, error: chrome.runtime.lastError.message });
-            return;
-          }
-          resolve(response as ApiResponse<T>);
-        });
+        try {
+          chrome.runtime.sendMessage({ type: 'api_request', url, init }, (response) => {
+            if (chrome.runtime.lastError) {
+              resolve({ ok: false, error: chrome.runtime.lastError.message });
+              return;
+            }
+            resolve(response as ApiResponse<T>);
+          });
+        } catch (error) {
+          resolve({ ok: false, error: error instanceof Error ? error.message : String(error) });
+        }
       }),
     []
   );
+
+  const getStateRowFromSupabase = useCallback(async () => {
+    if (!supabase) {
+      return { ok: false, error: 'Supabase client not configured.' } as const;
+    }
+    const userId = session?.user?.id;
+    if (!userId) {
+      return { ok: false, error: 'Supabase session unavailable.' } as const;
+    }
+    const { data: existing, error } = await supabase
+      .from('user_state')
+      .select('user_id, read_score, watch_balance_minutes')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) {
+      return { ok: false, error: error.message } as const;
+    }
+    if (existing) {
+      return { ok: true, data: existing } as const;
+    }
+    const { data: inserted, error: insertError } = await supabase
+      .from('user_state')
+      .insert({ user_id: userId, read_score: 0, watch_balance_minutes: 0 })
+      .select('user_id, read_score, watch_balance_minutes')
+      .single();
+    if (insertError || !inserted) {
+      return {
+        ok: false,
+        error: insertError?.message || 'Failed to create watch balance state.'
+      } as const;
+    }
+    return { ok: true, data: inserted } as const;
+  }, [session, supabase]);
+
+  const loadStateFromSupabase = useCallback(async () => {
+    const result = await getStateRowFromSupabase();
+    if (!result.ok) {
+      return { ok: false, error: result.error } as const;
+    }
+    const data = result.data;
+    return {
+      ok: true,
+      data: {
+        level: computeLevel(data.read_score),
+        readScore: data.read_score,
+        watchBalanceMinutes: data.watch_balance_minutes
+      }
+    } as const;
+  }, [getStateRowFromSupabase]);
 
   useEffect(() => {
     if (videoId && videoId !== latestVideoId.current) {
@@ -133,22 +189,104 @@ function OverlayApp() {
   }, [videoId]);
 
   const loadState = useCallback(async () => {
-    if (!session) return;
+    if (!session) return false;
+    const supabaseState = await loadStateFromSupabase();
+    if (supabaseState.ok && supabaseState.data) {
+      setMetrics(supabaseState.data);
+      return true;
+    }
     const response = await requestFromBackground<Metrics>(`${API_BASE_URL}/state`, {
       headers: { Authorization: `Bearer ${session.access_token}` }
     });
-    if (!response.ok || !response.body) return;
+    if (!response.ok || !response.body) {
+      return false;
+    }
     const data = response.body;
     setMetrics({
       level: data.level,
       readScore: data.readScore,
       watchBalanceMinutes: data.watchBalanceMinutes
     });
-  }, [session, requestFromBackground]);
+    return true;
+  }, [session, loadStateFromSupabase, requestFromBackground]);
+
+  useEffect(() => {
+    loadStateRef.current = loadState;
+  }, [loadState]);
+
+  const applyEventWithSupabase = useCallback(
+    async (type: string, data?: Record<string, unknown>) => {
+      if (!supabase) {
+        return { ok: false, error: 'Supabase client not configured.' } as const;
+      }
+      const userId = session?.user?.id;
+      if (!userId) {
+        return { ok: false, error: 'Supabase session unavailable.' } as const;
+      }
+
+      let deltaScore = 0;
+      let deltaMinutes = 0;
+
+      switch (type) {
+        case 'read_completed':
+          deltaScore += READ_GAIN_SCORE;
+          deltaMinutes += READ_GAIN_MIN;
+          break;
+        case 'watch_initiated': {
+          const minutes = typeof data?.minutes === 'number' ? data.minutes : WATCH_COST_MIN;
+          deltaMinutes -= minutes;
+          break;
+        }
+        case 'session_end': {
+          const state = await getStateRowFromSupabase();
+          if (!state.ok || !state.data) {
+            return { ok: false, error: state.error || 'Unable to load state.' } as const;
+          }
+          if (state.data.watch_balance_minutes < 0) {
+            deltaScore -= SCORE_PENALTY;
+          }
+          break;
+        }
+        default:
+          return { ok: true, data: null } as const;
+      }
+
+      const currentState = await getStateRowFromSupabase();
+      if (!currentState.ok || !currentState.data) {
+        return { ok: false, error: currentState.error || 'Unable to load state.' } as const;
+      }
+      const nextScore = currentState.data.read_score + deltaScore;
+      const nextBalance = currentState.data.watch_balance_minutes + deltaMinutes;
+      const { error } = await supabase
+        .from('user_state')
+        .update({
+          read_score: nextScore,
+          watch_balance_minutes: nextBalance,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId);
+      if (error) {
+        return { ok: false, error: error.message } as const;
+      }
+      return {
+        ok: true,
+        data: {
+          level: computeLevel(nextScore),
+          readScore: nextScore,
+          watchBalanceMinutes: nextBalance
+        }
+      } as const;
+    },
+    [session, getStateRowFromSupabase, supabase]
+  );
 
   const sendEvent = useCallback(
     async (type: string, data?: Record<string, unknown>) => {
       if (!session) return null;
+      const supabaseEvent = await applyEventWithSupabase(type, data);
+      if (supabaseEvent.ok) {
+        return supabaseEvent.data ?? null;
+      }
       const response = await requestFromBackground<Metrics>(`${API_BASE_URL}/event`, {
         method: 'POST',
         headers: {
@@ -157,10 +295,12 @@ function OverlayApp() {
         },
         body: JSON.stringify({ type, data })
       });
-      if (!response.ok) return null;
+      if (!response.ok) {
+        return null;
+      }
       return response.body ?? null;
     },
-    [session, requestFromBackground]
+    [session, applyEventWithSupabase, requestFromBackground]
   );
 
   useEffect(() => {
@@ -177,7 +317,7 @@ function OverlayApp() {
         supabase.auth.getSession().then(({ data }) => {
           setSession(data.session);
           if (data.session) {
-            void loadState();
+            void loadStateRef.current();
           }
         });
         setAuthInProgress(false);
@@ -194,7 +334,13 @@ function OverlayApp() {
       listener.subscription.unsubscribe();
       chrome.runtime.onMessage.removeListener(handleMessage);
     };
-  }, [supabase, loadState]);
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!session) {
+      setMetrics(null);
+    }
+  }, [session]);
 
   useEffect(() => {
     if (!supabase) {
@@ -206,8 +352,26 @@ function OverlayApp() {
 
   useEffect(() => {
     if (!videoId || !session) return;
-    void loadState();
+    let attempts = 0;
+    let retryId: number | null = null;
+    let cancelled = false;
+
+    const syncState = async () => {
+      attempts += 1;
+      const ok = await loadState();
+      if (!ok && !cancelled && attempts < 3) {
+        retryId = window.setTimeout(syncState, 1000);
+      }
+    };
+
+    void syncState();
     void sendEvent('video_opened', { videoId });
+    return () => {
+      cancelled = true;
+      if (retryId !== null) {
+        window.clearTimeout(retryId);
+      }
+    };
   }, [videoId, session, loadState, sendEvent]);
 
   useEffect(() => {
@@ -264,8 +428,10 @@ function OverlayApp() {
         readScore: updated.readScore,
         watchBalanceMinutes: updated.watchBalanceMinutes
       });
+    } else {
+      await loadState();
     }
-  }, [sendEvent, videoId, session]);
+  }, [sendEvent, videoId, session, loadState]);
 
   const handleReadFirst = useCallback(async () => {
     if (!session) return;
@@ -277,8 +443,10 @@ function OverlayApp() {
         readScore: updated.readScore,
         watchBalanceMinutes: updated.watchBalanceMinutes
       });
+    } else {
+      await loadState();
     }
-  }, [sendEvent, videoId, session]);
+  }, [sendEvent, videoId, session, loadState]);
 
   const handleLogin = useCallback(async () => {
     if (!supabase) {
@@ -296,17 +464,22 @@ function OverlayApp() {
       setAuthInProgress(false);
       return;
     }
-    chrome.runtime.sendMessage({ type: 'oauth_start', url: data.url }, (response) => {
-      if (chrome.runtime.lastError) {
-        setAuthError(chrome.runtime.lastError.message);
-        setAuthInProgress(false);
-        return;
-      }
-      if (!response?.ok) {
-        setAuthError(response?.error || 'OAuth failed.');
-        setAuthInProgress(false);
-      }
-    });
+    try {
+      chrome.runtime.sendMessage({ type: 'oauth_start', url: data.url }, (response) => {
+        if (chrome.runtime.lastError) {
+          setAuthError(chrome.runtime.lastError.message);
+          setAuthInProgress(false);
+          return;
+        }
+        if (!response?.ok) {
+          setAuthError(response?.error || 'OAuth failed.');
+          setAuthInProgress(false);
+        }
+      });
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Extension runtime unavailable.');
+      setAuthInProgress(false);
+    }
   }, [supabase]);
 
   if (!videoId) return null;

@@ -63,7 +63,9 @@ button.addEventListener('click', async () => {
   if (error) {
     await clearLocalSession();
   }
-  chrome.runtime.sendMessage({ type: 'auth_signed_out' });
+  try {
+    chrome.runtime.sendMessage({ type: 'auth_signed_out' });
+  } catch {}
   await refresh();
 });
 

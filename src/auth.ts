@@ -11,7 +11,9 @@ if (!supabase) {
 } else {
   supabase.auth.getSession().then(() => {
     status.textContent = 'Signed in. You can close this tab.';
-    chrome.runtime.sendMessage({ type: 'auth_complete' });
+    try {
+      chrome.runtime.sendMessage({ type: 'auth_complete' });
+    } catch {}
     window.close();
   });
 }

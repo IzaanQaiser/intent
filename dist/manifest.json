@@ -9,15 +9,16 @@
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
-    "http://localhost:8787/*"
+    "http://127.0.0.1:8787/*",
+    "https://nuswovjhpmeezklsocmr.supabase.co/*"
   ],
   "content_scripts": [
     {
       "js": [
-        "assets/contentScript.tsx-loader-CvyBG3T9.js"
+        "assets/contentScript.tsx-loader-CXePtgeR.js"
       ],
       "matches": [
-        "https://www.youtube.com/watch*"
+        "https://www.youtube.com/*"
       ],
       "run_at": "document_idle",
       "css": [
@@ -49,8 +50,8 @@
       ],
       "resources": [
         "assets/client-DMp2t5-j.js",
-        "assets/supabaseClient-CWLpkwh3.js",
-        "assets/contentScript.tsx-Cf3Jh6S0.js"
+        "assets/supabaseClient-DihBYOwf.js",
+        "assets/contentScript.tsx-DnBVK0Q5.js"
       ],
       "use_dynamic_url": false
     }

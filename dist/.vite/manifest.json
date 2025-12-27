@@ -1,6 +1,6 @@
 {
   "../../../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-CiV8eh1c.js",
+    "file": "assets/crx-manifest.js-BGhKsL3L.js",
     "name": "crx-manifest.js",
     "src": "../../../../../@crx/manifest",
     "isEntry": true
@@ -13,22 +13,22 @@
     "file": "assets/modulepreload-polyfill-B5Qt9EMX.js",
     "name": "modulepreload-polyfill"
   },
-  "_supabaseClient-CWLpkwh3.js": {
-    "file": "assets/supabaseClient-CWLpkwh3.js",
+  "_supabaseClient-DihBYOwf.js": {
+    "file": "assets/supabaseClient-DihBYOwf.js",
     "name": "supabaseClient"
   },
   "auth.html": {
-    "file": "assets/auth-Cj4ai_q8.js",
+    "file": "assets/auth-Dua_dJns.js",
     "name": "auth",
     "src": "auth.html",
     "isEntry": true,
     "imports": [
       "_modulepreload-polyfill-B5Qt9EMX.js",
-      "_supabaseClient-CWLpkwh3.js"
+      "_supabaseClient-DihBYOwf.js"
     ]
   },
   "contentScript.tsx-loader.js": {
-    "file": "assets/contentScript.tsx-loader-CvyBG3T9.js",
+    "file": "assets/contentScript.tsx-loader-CXePtgeR.js",
     "src": "contentScript.tsx-loader.js"
   },
   "index.html": {
@@ -45,13 +45,13 @@
     ]
   },
   "popup.html": {
-    "file": "assets/popup-DGwNePqW.js",
+    "file": "assets/popup-BY2WfEhu.js",
     "name": "popup",
     "src": "popup.html",
     "isEntry": true,
     "imports": [
       "_modulepreload-polyfill-B5Qt9EMX.js",
-      "_supabaseClient-CWLpkwh3.js"
+      "_supabaseClient-DihBYOwf.js"
     ],
     "css": [
       "assets/popup-C7nCNhwQ.css"
@@ -64,13 +64,13 @@
     "isEntry": true
   },
   "src/contentScript.tsx": {
-    "file": "assets/contentScript.tsx-Cf3Jh6S0.js",
+    "file": "assets/contentScript.tsx-DnBVK0Q5.js",
     "name": "contentScript.tsx",
     "src": "src/contentScript.tsx",
     "isEntry": true,
     "imports": [
       "_client-DMp2t5-j.js",
-      "_supabaseClient-CWLpkwh3.js"
+      "_supabaseClient-DihBYOwf.js"
     ],
     "css": [
       "assets/contentScript-CeWOYZJP.css"

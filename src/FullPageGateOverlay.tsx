@@ -9,7 +9,7 @@ type Metrics = {
 type FullPageGateOverlayProps = {
   isVisible: boolean;
   isLoading: boolean;
-  metrics: Metrics;
+  metrics: Metrics | null;
   quote: string;
   isAuthenticated: boolean;
   authError: string | null;
@@ -37,7 +37,21 @@ export default function FullPageGateOverlay({
   onWatchNow
 }: FullPageGateOverlayProps) {
   if (!isVisible) return null;
+  if (isAuthenticated && !metrics) {
+    return (
+      <div className="intent-overlay">
+        <div className="intent-overlay__panel">
+          <div className="intent-overlay__title">Read First</div>
+          <div className="intent-overlay__subtitle">{quote}</div>
+          <div className="intent-overlay__loading">
+            Syncing your watch balance…
+          </div>
+        </div>
+      </div>
+    );
+  }
 
+  const safeMetrics = metrics ?? { level: 1, readScore: 0, watchBalanceMinutes: 0 };
   const [holdProgress, setHoldProgress] = useState(0);
   const [buttonWidth, setButtonWidth] = useState(0);
   const [labelMetrics, setLabelMetrics] = useState({ left: 0, width: 0 });
@@ -151,10 +165,11 @@ export default function FullPageGateOverlay({
     };
   }, [isAuthenticated]);
 
-  const currentLevel = Math.floor(metrics.readScore / 400) + 1;
-  const levelAfterRead = Math.floor((metrics.readScore + READ_GAIN_SCORE) / 400) + 1;
-  const balanceAfterWatch = metrics.watchBalanceMinutes - WATCH_COST_MIN;
-  const afterWatchScore = balanceAfterWatch < 0 ? metrics.readScore - SCORE_PENALTY : metrics.readScore;
+  const currentLevel = Math.floor(safeMetrics.readScore / 400) + 1;
+  const levelAfterRead = Math.floor((safeMetrics.readScore + READ_GAIN_SCORE) / 400) + 1;
+  const balanceAfterWatch = safeMetrics.watchBalanceMinutes - WATCH_COST_MIN;
+  const afterWatchScore =
+    balanceAfterWatch < 0 ? safeMetrics.readScore - SCORE_PENALTY : safeMetrics.readScore;
   const levelAfterPenalty = Math.floor(afterWatchScore / 400) + 1;
   const levelIndicator = levelAfterRead > currentLevel ? '↑' : '=';
   const balanceLabel =
@@ -184,7 +199,7 @@ export default function FullPageGateOverlay({
           <div className="intent-overlay__metric">
             <span className="intent-overlay__metric-label">Watch Balance</span>
             <span className="intent-overlay__metric-value">
-              {metrics.watchBalanceMinutes} min
+              {safeMetrics.watchBalanceMinutes} min
             </span>
           </div>
         </div>
