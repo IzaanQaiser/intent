@@ -8,7 +8,7 @@ const manifest = {
   version: '0.0.1',
   description: 'Read-first YouTube summaries with attention-aware feedback.',
   permissions: ['storage', 'identity'],
-  host_permissions: ['https://www.youtube.com/*'],
+  host_permissions: ['https://www.youtube.com/*', 'http://localhost:8787/*'],
   content_scripts: [
     {
       matches: ['https://www.youtube.com/watch*'],

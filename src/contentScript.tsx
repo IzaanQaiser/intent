@@ -14,6 +14,10 @@ type Metrics = {
   watchBalanceMinutes: number;
 };
 
+type ApiResponse<T> =
+  | { ok: true; status: number; body: T | null }
+  | { ok: false; status?: number; error?: string; body?: unknown };
+
 function getVideoId(url: string) {
   try {
     const parsed = new URL(url);
@@ -102,6 +106,24 @@ function OverlayApp() {
     []
   );
 
+  const requestFromBackground = useCallback(
+    async <T,>(url: string, init?: RequestInit): Promise<ApiResponse<T>> =>
+      new Promise((resolve) => {
+        if (!chrome?.runtime?.sendMessage) {
+          resolve({ ok: false, error: 'Extension runtime unavailable.' });
+          return;
+        }
+        chrome.runtime.sendMessage({ type: 'api_request', url, init }, (response) => {
+          if (chrome.runtime.lastError) {
+            resolve({ ok: false, error: chrome.runtime.lastError.message });
+            return;
+          }
+          resolve(response as ApiResponse<T>);
+        });
+      }),
+    []
+  );
+
   useEffect(() => {
     if (videoId && videoId !== latestVideoId.current) {
       latestVideoId.current = videoId;
@@ -112,22 +134,22 @@ function OverlayApp() {
 
   const loadState = useCallback(async () => {
     if (!session) return;
-    const response = await fetch(`${API_BASE_URL}/state`, {
+    const response = await requestFromBackground<Metrics>(`${API_BASE_URL}/state`, {
       headers: { Authorization: `Bearer ${session.access_token}` }
     });
-    if (!response.ok) return;
-    const data = await response.json();
+    if (!response.ok || !response.body) return;
+    const data = response.body;
     setMetrics({
       level: data.level,
       readScore: data.readScore,
       watchBalanceMinutes: data.watchBalanceMinutes
     });
-  }, [session]);
+  }, [session, requestFromBackground]);
 
   const sendEvent = useCallback(
     async (type: string, data?: Record<string, unknown>) => {
       if (!session) return null;
-      const response = await fetch(`${API_BASE_URL}/event`, {
+      const response = await requestFromBackground<Metrics>(`${API_BASE_URL}/event`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -136,9 +158,9 @@ function OverlayApp() {
         body: JSON.stringify({ type, data })
       });
       if (!response.ok) return null;
-      return response.json();
+      return response.body ?? null;
     },
-    [session]
+    [session, requestFromBackground]
   );
 
   useEffect(() => {

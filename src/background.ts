@@ -9,6 +9,24 @@ function broadcastAuthEvent(type: 'auth_complete' | 'auth_signed_out') {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === 'api_request' && message.url) {
+    fetch(message.url, message.init)
+      .then(async (response) => {
+        const text = await response.text();
+        let body: unknown = text;
+        try {
+          body = text ? JSON.parse(text) : null;
+        } catch {
+          body = text;
+        }
+        sendResponse({ ok: response.ok, status: response.status, body });
+      })
+      .catch((error: Error) => {
+        sendResponse({ ok: false, error: error.message });
+      });
+    return true;
+  }
+
   if (message?.type === 'oauth_start' && message.url) {
     chrome.identity.launchWebAuthFlow({ url: message.url, interactive: true }, (redirectUrl) => {
       if (chrome.runtime.lastError || !redirectUrl) {

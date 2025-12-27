@@ -25,6 +25,17 @@ button.className = 'popup__button';
 button.type = 'button';
 container.appendChild(button);
 
+async function clearLocalSession() {
+  const storageKey = (supabase?.auth as { storageKey?: string } | undefined)?.storageKey;
+  if (!storageKey) return;
+  await new Promise<void>((resolve) => {
+    chrome.storage.local.remove(
+      [storageKey, `${storageKey}-code-verifier`, `${storageKey}-user`],
+      () => resolve()
+    );
+  });
+}
+
 async function refresh() {
   if (!supabase) {
     status.textContent = 'Missing Supabase configuration.';
@@ -48,7 +59,10 @@ async function refresh() {
 button.addEventListener('click', async () => {
   if (!supabase) return;
   button.disabled = true;
-  await supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut({ scope: 'local' });
+  if (error) {
+    await clearLocalSession();
+  }
   chrome.runtime.sendMessage({ type: 'auth_signed_out' });
   await refresh();
 });

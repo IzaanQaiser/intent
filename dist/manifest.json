@@ -8,12 +8,13 @@
     "identity"
   ],
   "host_permissions": [
-    "https://www.youtube.com/*"
+    "https://www.youtube.com/*",
+    "http://localhost:8787/*"
   ],
   "content_scripts": [
     {
       "js": [
-        "assets/contentScript.tsx-loader-D1ZVBCst.js"
+        "assets/contentScript.tsx-loader-CvyBG3T9.js"
       ],
       "matches": [
         "https://www.youtube.com/watch*"
@@ -49,7 +50,7 @@
       "resources": [
         "assets/client-DMp2t5-j.js",
         "assets/supabaseClient-CWLpkwh3.js",
-        "assets/contentScript.tsx-fXijFNU_.js"
+        "assets/contentScript.tsx-Cf3Jh6S0.js"
       ],
       "use_dynamic_url": false
     }

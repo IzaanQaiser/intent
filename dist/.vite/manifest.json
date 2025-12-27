@@ -1,6 +1,6 @@
 {
   "../../../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-sJ1Lj4QK.js",
+    "file": "assets/crx-manifest.js-CiV8eh1c.js",
     "name": "crx-manifest.js",
     "src": "../../../../../@crx/manifest",
     "isEntry": true
@@ -28,7 +28,7 @@
     ]
   },
   "contentScript.tsx-loader.js": {
-    "file": "assets/contentScript.tsx-loader-D1ZVBCst.js",
+    "file": "assets/contentScript.tsx-loader-CvyBG3T9.js",
     "src": "contentScript.tsx-loader.js"
   },
   "index.html": {
@@ -45,7 +45,7 @@
     ]
   },
   "popup.html": {
-    "file": "assets/popup-nI-Z8Nmd.js",
+    "file": "assets/popup-DGwNePqW.js",
     "name": "popup",
     "src": "popup.html",
     "isEntry": true,
@@ -58,13 +58,13 @@
     ]
   },
   "src/background.ts": {
-    "file": "assets/background.ts-OrlJTFy-.js",
+    "file": "assets/background.ts-DiPhWffB.js",
     "name": "background.ts",
     "src": "src/background.ts",
     "isEntry": true
   },
   "src/contentScript.tsx": {
-    "file": "assets/contentScript.tsx-fXijFNU_.js",
+    "file": "assets/contentScript.tsx-Cf3Jh6S0.js",
     "name": "contentScript.tsx",
     "src": "src/contentScript.tsx",
     "isEntry": true,
