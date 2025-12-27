@@ -1,9 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { createClient, Session } from '@supabase/supabase-js';
 import './contentScript.css';
 import FullPageGateOverlay from './FullPageGateOverlay';
 
 const CONTAINER_ID = 'intent-read-first-root';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8787';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+type Metrics = {
+  level: number;
+  readScore: number;
+  watchBalanceMinutes: number;
+};
 
 function getVideoId(url: string) {
   try {
@@ -72,7 +82,19 @@ function OverlayApp() {
   const [isVisible, setIsVisible] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [quoteIndex, setQuoteIndex] = useState(0);
+  const [metrics, setMetrics] = useState<Metrics>({
+    level: 1,
+    readScore: 0,
+    watchBalanceMinutes: 0
+  });
+  const [session, setSession] = useState<Session | null>(null);
   const latestVideoId = useRef<string | null>(videoId);
+  const supabase = useMemo(() => {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+    return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true }
+    });
+  }, []);
   const quotes = useMemo(
     () => [
       'It is not enough to be busy; so are the ants. The question is: What are we busy about? — Henry David Thoreau',
@@ -92,6 +114,54 @@ function OverlayApp() {
       setIsLoading(false);
     }
   }, [videoId]);
+
+  const loadState = useCallback(async () => {
+    if (!session) return;
+    const response = await fetch(`${API_BASE_URL}/state`, {
+      headers: { Authorization: `Bearer ${session.access_token}` }
+    });
+    if (!response.ok) return;
+    const data = await response.json();
+    setMetrics({
+      level: data.level,
+      readScore: data.readScore,
+      watchBalanceMinutes: data.watchBalanceMinutes
+    });
+  }, [session]);
+
+  const sendEvent = useCallback(
+    async (type: string, data?: Record<string, unknown>) => {
+      if (!session) return null;
+      const response = await fetch(`${API_BASE_URL}/event`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ type, data })
+      });
+      if (!response.ok) return null;
+      return response.json();
+    },
+    [session]
+  );
+
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+    });
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!videoId || !session) return;
+    void loadState();
+    void sendEvent('video_opened', { videoId });
+  }, [videoId, session, loadState, sendEvent]);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -136,23 +206,41 @@ function OverlayApp() {
     };
   }, [isVisible, videoId]);
 
-  const handleWatchNow = useCallback(() => {
+  const handleWatchNow = useCallback(async () => {
+    if (!session) return;
+    const updated = await sendEvent('watch_initiated', { minutes: 10, videoId });
+    if (updated) {
+      setMetrics({
+        level: updated.level,
+        readScore: updated.readScore,
+        watchBalanceMinutes: updated.watchBalanceMinutes
+      });
+    }
     setIsVisible(false);
     setIsLoading(false);
-  }, []);
+  }, [sendEvent, videoId, session]);
 
-  const handleReadFirst = useCallback(() => {
+  const handleReadFirst = useCallback(async () => {
+    if (!session) return;
     setIsLoading(true);
-  }, []);
+    const updated = await sendEvent('read_completed', { videoId });
+    if (updated) {
+      setMetrics({
+        level: updated.level,
+        readScore: updated.readScore,
+        watchBalanceMinutes: updated.watchBalanceMinutes
+      });
+    }
+  }, [sendEvent, videoId, session]);
 
-  const metrics = useMemo(
-    () => ({
-      level: 3,
-      readScore: 1240,
-      watchBalanceMinutes: 15
-    }),
-    []
-  );
+  const handleLogin = useCallback(async () => {
+    if (!supabase) return;
+    const redirectTo = chrome.runtime?.getURL('auth.html');
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: redirectTo ? { redirectTo } : undefined
+    });
+  }, [supabase]);
 
   if (!videoId) return null;
 
@@ -160,8 +248,10 @@ function OverlayApp() {
     <FullPageGateOverlay
       isVisible={isVisible}
       isLoading={isLoading}
+      isAuthenticated={Boolean(session)}
       metrics={metrics}
       quote={quotes[quoteIndex]}
+      onLogin={handleLogin}
       onReadFirst={handleReadFirst}
       onWatchNow={handleWatchNow}
     />

@@ -22,5 +22,13 @@ const manifest = {
 };
 
 export default defineConfig({
-  plugins: [react(), crx({ manifest })]
+  plugins: [react(), crx({ manifest })],
+  build: {
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        auth: 'auth.html'
+      }
+    }
+  }
 });
