@@ -233,6 +233,8 @@ function OverlayApp() {
 
   const handleWatchNow = useCallback(async () => {
     if (!session) return;
+    setIsVisible(false);
+    setIsLoading(false);
     const updated = await sendEvent('watch_initiated', { minutes: 10, videoId });
     if (updated) {
       setMetrics({
@@ -241,8 +243,6 @@ function OverlayApp() {
         watchBalanceMinutes: updated.watchBalanceMinutes
       });
     }
-    setIsVisible(false);
-    setIsLoading(false);
   }, [sendEvent, videoId, session]);
 
   const handleReadFirst = useCallback(async () => {
