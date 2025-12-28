@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { execFile } from 'child_process';
 import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
@@ -27,6 +29,73 @@ const WATCH_COST_MIN = 10;
 const SCORE_PENALTY = 10;
 
 const computeLevel = (readScore: number) => Math.floor(readScore / 400) + 1;
+const TRANSCRIPT_SCRIPT = path.resolve(process.cwd(), 'scripts', 'transcriptgrab.py');
+
+type ExecResult = {
+  code: number;
+  stdout: string;
+  stderr: string;
+};
+
+type PythonCommand = {
+  cmd: string;
+  extraArgs?: string[];
+};
+
+const pythonCandidates: PythonCommand[] =
+  process.platform === 'win32'
+    ? [
+        { cmd: 'py', extraArgs: ['-3'] },
+        { cmd: 'python' },
+        { cmd: 'python3' }
+      ]
+    : [{ cmd: 'python3' }, { cmd: 'python' }];
+
+function execFileWithCode(command: string, args: string[]): Promise<ExecResult> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      command,
+      args,
+      { maxBuffer: 10 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          const err = error as NodeJS.ErrnoException & { code?: number };
+          if (err.code === 'ENOENT') {
+            reject(err);
+            return;
+          }
+          resolve({
+            code: typeof err.code === 'number' ? err.code : 1,
+            stdout: String(stdout ?? ''),
+            stderr: String(stderr ?? '')
+          });
+          return;
+        }
+        resolve({ code: 0, stdout: String(stdout ?? ''), stderr: String(stderr ?? '') });
+      }
+    );
+  });
+}
+
+async function runTranscriptGrab(target: string, lang: string) {
+  const args = [TRANSCRIPT_SCRIPT, target, '--lang', lang, '--format', 'json'];
+  let lastError: Error | null = null;
+
+  for (const candidate of pythonCandidates) {
+    const fullArgs = [...(candidate.extraArgs ?? []), ...args];
+    try {
+      return await execFileWithCode(candidate.cmd, fullArgs);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  throw new Error(
+    `Python executable not found (tried ${pythonCandidates.map((c) => c.cmd).join(', ')})${
+      lastError ? `: ${lastError.message}` : ''
+    }`
+  );
+}
 
 async function getOrCreateState(userId: string) {
   const { data: existing, error } = await supabase
@@ -169,6 +238,40 @@ app.post('/summarize', async (_req, res) => {
   res.json({
     summary: 'Summary generation is not wired yet. This is a placeholder response.'
   });
+});
+
+app.post('/transcript', async (req, res) => {
+  try {
+    const { videoId, url, lang } = req.body || {};
+    const target =
+      typeof url === 'string' && url.trim()
+        ? url.trim()
+        : typeof videoId === 'string' && videoId.trim()
+          ? `https://www.youtube.com/watch?v=${videoId.trim()}`
+          : '';
+    if (!target) {
+      res.status(400).json({ error: 'Missing videoId or url' });
+      return;
+    }
+    const language = typeof lang === 'string' && lang.trim() ? lang.trim() : 'en';
+    const result = await runTranscriptGrab(target, language);
+    if (result.code === 0) {
+      const payload = JSON.parse(result.stdout);
+      if (!payload?.transcript) {
+        res.status(404).json({ error: 'No transcript available for this video' });
+        return;
+      }
+      res.json(payload);
+      return;
+    }
+    if (result.code === 2) {
+      res.status(404).json({ error: 'No transcript available for this video' });
+      return;
+    }
+    res.status(500).json({ error: result.stderr || 'Failed to fetch transcript' });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
 });
 
 app.listen(PORT, () => {

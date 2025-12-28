@@ -96,6 +96,7 @@ function OverlayApp() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const latestVideoId = useRef<string | null>(videoId);
+  const transcriptLoggedRef = useRef<string | null>(null);
   const loadStateRef = useRef<() => Promise<boolean>>(async () => false);
   const quotes = useMemo(
     () => [
@@ -185,6 +186,7 @@ function OverlayApp() {
       latestVideoId.current = videoId;
       setIsVisible(true);
       setIsLoading(false);
+      transcriptLoggedRef.current = null;
     }
   }, [videoId]);
 
@@ -373,6 +375,31 @@ function OverlayApp() {
       }
     };
   }, [videoId, session, loadState, sendEvent]);
+
+  useEffect(() => {
+    if (!videoId || !isVisible || !session || !metrics) return;
+    if (transcriptLoggedRef.current === videoId) return;
+    transcriptLoggedRef.current = videoId;
+
+    const fetchTranscript = async () => {
+      const response = await requestFromBackground<{ transcript?: string; source?: string }>(
+        `${API_BASE_URL}/transcript`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoId })
+        }
+      );
+      if (response.ok && response.body?.transcript) {
+        const source = response.body.source ? ` (${response.body.source})` : '';
+        console.log(`[Intent] Transcript${source} for ${videoId}:\n${response.body.transcript}`);
+      } else {
+        console.warn(`[Intent] Transcript unavailable for ${videoId}.`);
+      }
+    };
+
+    void fetchTranscript();
+  }, [videoId, isVisible, session, metrics, requestFromBackground]);
 
   useEffect(() => {
     if (!isVisible) return;
