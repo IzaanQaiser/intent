@@ -60,16 +60,19 @@ export default function FullPageGateOverlay({
   const [holdProgress, setHoldProgress] = useState(0);
   const [buttonWidth, setButtonWidth] = useState(0);
   const [labelMetrics, setLabelMetrics] = useState({ left: 0, width: 0 });
+  const [showHoldMotto, setShowHoldMotto] = useState(false);
   const holdStartRef = useRef<number | null>(null);
   const holdFrameRef = useRef<number | null>(null);
   const holdTriggeredRef = useRef(false);
   const releaseFrameRef = useRef<number | null>(null);
   const progressRef = useRef(0);
+  const mottoTimerRef = useRef<number | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const labelRef = useRef<HTMLSpanElement | null>(null);
   const HOLD_DURATION_MS = 5000;
   const BOOST_DURATION_MS = 120;
   const RELEASE_DURATION_MS = 140;
+  const MOTTO_DELAY_MS = 2000;
 
   const stopHold = useCallback(() => {
     if (holdFrameRef.current !== null) {
@@ -102,6 +105,23 @@ export default function FullPageGateOverlay({
     releaseFrameRef.current = requestAnimationFrame(releaseTick);
   }, []);
 
+  const clearMotto = useCallback(() => {
+    if (mottoTimerRef.current !== null) {
+      window.clearTimeout(mottoTimerRef.current);
+      mottoTimerRef.current = null;
+    }
+    setShowHoldMotto(false);
+  }, []);
+
+  const startMottoTimer = useCallback(() => {
+    if (mottoTimerRef.current !== null) {
+      window.clearTimeout(mottoTimerRef.current);
+    }
+    mottoTimerRef.current = window.setTimeout(() => {
+      setShowHoldMotto(true);
+    }, MOTTO_DELAY_MS);
+  }, []);
+
   const startHold = useCallback(() => {
     const now = performance.now();
     holdStartRef.current = now;
@@ -128,21 +148,35 @@ export default function FullPageGateOverlay({
         holdTriggeredRef.current = true;
         onWatchNow();
         stopHold();
+        clearMotto();
         return;
       }
       holdFrameRef.current = requestAnimationFrame(tick);
     };
 
     holdFrameRef.current = requestAnimationFrame(tick);
-  }, [onWatchNow, stopHold]);
+  }, [onWatchNow, stopHold, clearMotto]);
+
+  const handleWatchHoldStart = useCallback(() => {
+    startHold();
+    startMottoTimer();
+  }, [startHold, startMottoTimer]);
+
+  const handleWatchHoldEnd = useCallback(() => {
+    stopHold();
+    clearMotto();
+  }, [stopHold, clearMotto]);
 
   useEffect(() => {
     progressRef.current = holdProgress;
   }, [holdProgress]);
 
+
   useEffect(() => {
     if (!isVisible) stopHold();
   }, [isVisible, stopHold]);
+
+  useEffect(() => clearMotto, [clearMotto]);
 
   useLayoutEffect(() => {
     if (!isAuthenticated) return;
@@ -180,7 +214,8 @@ export default function FullPageGateOverlay({
     watchScorePenalty -
     (balanceAfterWatch < 0 ? SCORE_PENALTY : 0);
   const levelAfterPenalty = Math.floor(afterWatchScore / 400) + 1;
-  const levelIndicator = levelAfterRead > currentLevel ? '↑' : '=';
+  const levelIndicator = levelAfterRead > currentLevel ? '↑' : '-';
+  const watchLevelIndicator = levelAfterPenalty < currentLevel ? '↓' : '-';
   const formatMinutes = (value: number) =>
     Number.isInteger(value) ? String(value) : value.toFixed(1);
   const balanceLabel =
@@ -191,6 +226,9 @@ export default function FullPageGateOverlay({
     readBalanceAfter >= 0
       ? `+${formatMinutes(readBalanceAfter)}m`
       : `-${formatMinutes(Math.abs(readBalanceAfter))}m`;
+  const readButtonLabel = isLoading
+    ? 'Generating Summary...'
+    : `Read Instead (Watch Balance +${readGainLabel}m)`;
   const fillWidth = buttonWidth * holdProgress;
   const labelFillWidth = Math.max(
     0,
@@ -201,43 +239,47 @@ export default function FullPageGateOverlay({
   return (
     <div className="intent-overlay">
       <div className="intent-overlay__panel">
-        <div className="intent-overlay__title">Read First</div>
-        <div className="intent-overlay__subtitle">{quote}</div>
-        {isAuthenticated ? (
-          <div className="intent-overlay__metrics">
-          <div className="intent-overlay__metric">
-            <span className="intent-overlay__metric-label">Level</span>
-            <span className="intent-overlay__metric-value">{currentLevel}</span>
-          </div>
-          <div className="intent-overlay__metric">
-            <span className="intent-overlay__metric-label">Read Score</span>
-            <span className="intent-overlay__metric-value">{metrics.readScore}</span>
-          </div>
-          <div className="intent-overlay__metric">
-            <span className="intent-overlay__metric-label">Watch Balance</span>
-            <span className="intent-overlay__metric-value">
-              {safeMetrics.watchBalanceMinutes} min
-            </span>
-          </div>
-        </div>
-        ) : (
-          <div className="intent-overlay__auth">
-            <div className="intent-overlay__auth-title">Sign in to continue</div>
-            <div className="intent-overlay__auth-copy">
-              Your score and balance sync to your account. Sign in to proceed.
+        <div
+          className={`intent-overlay__content${
+            showHoldMotto ? ' intent-overlay__content--dim' : ''
+          }`}
+        >
+          <div className="intent-overlay__title">Read First</div>
+          <div className="intent-overlay__subtitle">{quote}</div>
+          {isAuthenticated ? (
+            <div className="intent-overlay__metrics">
+            <div className="intent-overlay__metric">
+              <span className="intent-overlay__metric-label">Level</span>
+              <span className="intent-overlay__metric-value">{currentLevel}</span>
             </div>
-            <button
-              className="intent-overlay__auth-button"
-              type="button"
-              onClick={onLogin}
-              disabled={authInProgress}
-            >
-              {authInProgress ? 'Authenticating…' : 'Sign in with Google'}
-            </button>
+            <div className="intent-overlay__metric">
+              <span className="intent-overlay__metric-label">Read Score</span>
+              <span className="intent-overlay__metric-value">{metrics.readScore}</span>
+            </div>
+            <div className="intent-overlay__metric">
+              <span className="intent-overlay__metric-label">Watch Balance</span>
+              <span className="intent-overlay__metric-value">
+                {safeMetrics.watchBalanceMinutes} min
+              </span>
+            </div>
           </div>
-        )}
-        {isAuthenticated ? (
-          <>
+          ) : (
+            <div className="intent-overlay__auth">
+              <div className="intent-overlay__auth-title">Sign in to continue</div>
+              <div className="intent-overlay__auth-copy">
+                Your score and balance sync to your account. Sign in to proceed.
+              </div>
+              <button
+                className="intent-overlay__auth-button"
+                type="button"
+                onClick={onLogin}
+                disabled={authInProgress}
+              >
+                {authInProgress ? 'Authenticating…' : 'Sign in with Google'}
+              </button>
+            </div>
+          )}
+          {isAuthenticated ? (
             <div className="intent-overlay__choice">
               <div className="intent-overlay__choice-title">Your Choice</div>
               <div className="intent-overlay__choice-grid">
@@ -252,6 +294,9 @@ export default function FullPageGateOverlay({
                     </span>
                     <span className="intent-overlay__chip intent-overlay__chip--highlight">
                       New Watch Balance {balanceLabel}
+                    </span>
+                    <span className="intent-overlay__chip">
+                      Level {levelAfterPenalty} {watchLevelIndicator}
                     </span>
                   </div>
                   {balanceAfterWatch < 0 ? (
@@ -269,9 +314,7 @@ export default function FullPageGateOverlay({
                       ) : null}
                     </>
                   ) : (
-                    <div className="intent-overlay__choice-subline">
-                      No additional score penalty (balance stays non-negative)
-                    </div>
+                    null
                   )}
                 </div>
                 <div className="intent-overlay__choice-card intent-overlay__choice-card--read">
@@ -296,62 +339,66 @@ export default function FullPageGateOverlay({
                 </div>
               </div>
             </div>
-            <div className="intent-overlay__actions">
-              <button
-                className="intent-overlay__secondary"
-                type="button"
-                onPointerDown={startHold}
-                onPointerUp={stopHold}
-                onPointerLeave={stopHold}
-                onPointerCancel={stopHold}
-                ref={buttonRef}
-              >
+          ) : null}
+        </div>
+        {isAuthenticated ? (
+          <div className="intent-overlay__actions">
+            <button
+              className="intent-overlay__secondary"
+              type="button"
+              onPointerDown={handleWatchHoldStart}
+              onPointerUp={handleWatchHoldEnd}
+              onPointerLeave={handleWatchHoldEnd}
+              onPointerCancel={handleWatchHoldEnd}
+              ref={buttonRef}
+            >
+              <span
+                className="intent-overlay__hold-fill"
+                style={{ transform: `scaleX(${holdProgress})` }}
+              />
+              <span className="intent-overlay__button-label intent-overlay__button-label--progress">
+                <span ref={labelRef} className="intent-overlay__button-label-base">
+                  Watch Now (Watch Balance -{watchCostMinutes}m)
+                </span>
                 <span
-                  className="intent-overlay__hold-fill"
-                  style={{ transform: `scaleX(${holdProgress})` }}
-                />
-                <span className="intent-overlay__button-label intent-overlay__button-label--progress">
-                  <span ref={labelRef} className="intent-overlay__button-label-base">
-                    Watch Now (Watch Balance -{watchCostMinutes}m)
-                  </span>
-                  <span
-                    className="intent-overlay__button-label-fill"
-                    style={{ ['--label-fill-px' as string]: `${labelFillPx}px` }}
-                  >
-                    Watch Now (Watch Balance -{watchCostMinutes}m)
-                  </span>
+                  className="intent-overlay__button-label-fill"
+                  style={{ ['--label-fill-px' as string]: `${labelFillPx}px` }}
+                >
+                  Watch Now (Watch Balance -{watchCostMinutes}m)
                 </span>
-              </button>
-              <button
-                className={`intent-overlay__primary intent-overlay__primary--read${
-                  isLoading ? ' intent-overlay__primary--read-active' : ''
+              </span>
+            </button>
+            <button
+              className={`intent-overlay__primary intent-overlay__primary--read${
+                isLoading ? ' intent-overlay__primary--read-active' : ''
+              }`}
+              type="button"
+              onClick={onReadFirst}
+              disabled={isLoading}
+            >
+              <span className="intent-overlay__press-fill" />
+              <span
+                className={`intent-overlay__button-label intent-overlay__button-label--progress${
+                  isLoading ? ' intent-overlay__button-label--loading' : ''
                 }`}
-                type="button"
-                onClick={onReadFirst}
-                disabled={isLoading}
               >
-                <span className="intent-overlay__press-fill" />
-                <span className="intent-overlay__button-label intent-overlay__button-label--progress">
-                  <span className="intent-overlay__button-label-base">
-                    {isLoading
-                      ? 'Generating summary…'
-                      : `Read Instead (Watch Balance +${readGainLabel}m)`}
-                  </span>
-                  <span className="intent-overlay__button-label-fill">
-                    {isLoading
-                      ? 'Generating summary…'
-                      : `Read Instead (Watch Balance +${readGainLabel}m)`}
-                  </span>
+                <span className="intent-overlay__button-label-base">
+                  {readButtonLabel}
                 </span>
-              </button>
-            </div>
-            {isLoading ? (
-              <div className="intent-overlay__loading">
-                Preparing a focused summary and key points…
-              </div>
-            ) : null}
-          </>
+                <span className="intent-overlay__button-label-fill">
+                  {readButtonLabel}
+                </span>
+              </span>
+            </button>
+          </div>
         ) : null}
+        <div
+          className={`intent-overlay__motto${
+            showHoldMotto ? ' intent-overlay__motto--visible' : ''
+          }`}
+        >
+          Old ways dont open new doors
+        </div>
       </div>
     </div>
   );

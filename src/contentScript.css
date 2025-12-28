@@ -17,6 +17,40 @@
   box-shadow: 0 30px 80px rgba(14, 12, 8, 0.45);
   color: #201b15;
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  position: relative;
+}
+
+.intent-overlay__content {
+  position: relative;
+  z-index: 1;
+  transition: opacity 160ms ease;
+}
+
+.intent-overlay__content--dim {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.intent-overlay__motto {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 32px;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #2f271f;
+  opacity: 0;
+  transition: opacity 160ms ease;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.intent-overlay__motto--visible {
+  opacity: 1;
 }
 
 .intent-overlay__title {
@@ -142,6 +176,7 @@
   background: #f6e1df;
   color: #4a1d1a;
   border: 1px solid #d7a8a3;
+  justify-content: center;
 }
 
 .intent-overlay__choice-card--read {
@@ -261,14 +296,15 @@
 
 .intent-overlay__choice-note--progress {
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  align-items: baseline;
+  gap: 6px;
   padding: 8px 12px;
   border-radius: 999px;
   background: #d7efe0;
   border: 1px solid #96c6a3;
   color: #1d3b26;
   font-weight: 600;
+  line-height: 1;
 }
 
 .intent-overlay__choice-note-label {
@@ -276,11 +312,12 @@
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: #2f6641;
+  font-weight: 700;
 }
 
 .intent-overlay__choice-note-score {
   font-size: inherit;
-  font-weight: inherit;
+  font-weight: 700;
   padding: 0;
   border-radius: 0;
   background: none;
@@ -290,11 +327,14 @@
   letter-spacing: inherit;
   text-decoration: underline;
   text-decoration-thickness: 2px;
-  text-underline-offset: 3px;
+  text-underline-offset: 2px;
 }
 
 .intent-overlay__choice-note-unit {
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
   color: #2f6641;
 }
 
@@ -397,6 +437,10 @@
   z-index: 1;
 }
 
+.intent-overlay__button-label--loading {
+  animation: intent-text-pulse 1.8s ease-in-out infinite;
+}
+
 .intent-overlay__button-label--progress {
   position: relative;
   display: inline-block;
@@ -412,6 +456,16 @@
   color: #ffffff;
   clip-path: inset(0 calc(100% - var(--label-fill-px, 0px)) 0 0);
   pointer-events: none;
+}
+
+@keyframes intent-text-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
 }
 
 .intent-overlay__primary--read .intent-overlay__button-label-base {
