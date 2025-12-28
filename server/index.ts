@@ -207,13 +207,18 @@ app.post('/event', async (req, res) => {
     let deltaMinutes = 0;
 
     switch (type) {
-      case 'read_completed':
-        deltaScore += READ_GAIN_SCORE;
-        deltaMinutes += READ_GAIN_MIN;
+      case 'read_completed': {
+        const minutes = typeof data?.minutes === 'number' ? data.minutes : READ_GAIN_MIN;
+        const score = typeof data?.score === 'number' ? data.score : READ_GAIN_SCORE;
+        deltaScore += score;
+        deltaMinutes += minutes;
         break;
+      }
       case 'watch_initiated': {
         const minutes = typeof data?.minutes === 'number' ? data.minutes : WATCH_COST_MIN;
         deltaMinutes -= minutes;
+        const score = typeof data?.score === 'number' ? data.score : 0;
+        deltaScore -= score;
         break;
       }
       case 'session_end': {

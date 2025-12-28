@@ -13,6 +13,7 @@ const WATCH_COST_MIN = 10;
 const SCORE_PENALTY = 10;
 
 const computeLevel = (readScore: number) => Math.floor(readScore / 400) + 1;
+const VIDEO_ROUND_UP_THRESHOLD_SEC = 30;
 
 type Metrics = {
   level: number;
@@ -56,6 +57,26 @@ function formatDuration(seconds: number) {
   const secs = total % 60;
   const parts = hours > 0 ? [hours, minutes, secs] : [minutes, secs];
   return parts.map((part) => String(part).padStart(2, '0')).join(':');
+}
+
+function getReadScoreGain(watchCostMinutes: number) {
+  if (!Number.isFinite(watchCostMinutes)) {
+    return READ_GAIN_SCORE;
+  }
+  return Math.round((watchCostMinutes * 2) / 10) * 10;
+}
+
+function getRoundedMinutesFromDuration(durationSeconds: number | null) {
+  if (!durationSeconds || !Number.isFinite(durationSeconds)) {
+    return WATCH_COST_MIN;
+  }
+  const duration = Math.max(0, durationSeconds);
+  const minutes = Math.floor(duration / 60);
+  const seconds = duration % 60;
+  if (seconds >= VIDEO_ROUND_UP_THRESHOLD_SEC) {
+    return minutes + 1;
+  }
+  return minutes;
 }
 
 function useVideoId() {
@@ -104,9 +125,13 @@ function OverlayApp() {
   const [authInProgress, setAuthInProgress] = useState(false);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [watchCostMinutes, setWatchCostMinutes] = useState(WATCH_COST_MIN);
   const latestVideoId = useRef<string | null>(videoId);
   const transcriptLoggedRef = useRef<string | null>(null);
   const loadStateRef = useRef<() => Promise<boolean>>(async () => false);
+  const readGainMinutes = useMemo(() => watchCostMinutes / 2, [watchCostMinutes]);
+  const readScoreGain = useMemo(() => getReadScoreGain(watchCostMinutes), [watchCostMinutes]);
+  const watchScorePenalty = readScoreGain;
   const quotes = useMemo(
     () => [
       'It is not enough to be busy; so are the ants. The question is: What are we busy about? — Henry David Thoreau',
@@ -195,9 +220,48 @@ function OverlayApp() {
       latestVideoId.current = videoId;
       setIsVisible(true);
       setIsLoading(false);
+      setWatchCostMinutes(WATCH_COST_MIN);
       transcriptLoggedRef.current = null;
     }
   }, [videoId]);
+
+  useEffect(() => {
+    if (!isVisible || !videoId) return;
+    let currentVideo: HTMLVideoElement | null = null;
+
+    const updateDuration = () => {
+      const duration = currentVideo ? currentVideo.duration : null;
+      setWatchCostMinutes(getRoundedMinutesFromDuration(duration));
+    };
+
+    const bindVideo = () => {
+      const nextVideo = document.querySelector<HTMLVideoElement>('video');
+      if (!nextVideo) {
+        updateDuration();
+        return;
+      }
+      if (currentVideo && currentVideo !== nextVideo) {
+        currentVideo.removeEventListener('loadedmetadata', updateDuration);
+        currentVideo.removeEventListener('durationchange', updateDuration);
+      }
+      currentVideo = nextVideo;
+      updateDuration();
+      currentVideo.addEventListener('loadedmetadata', updateDuration);
+      currentVideo.addEventListener('durationchange', updateDuration);
+    };
+
+    bindVideo();
+    const observer = new MutationObserver(bindVideo);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+      if (currentVideo) {
+        currentVideo.removeEventListener('loadedmetadata', updateDuration);
+        currentVideo.removeEventListener('durationchange', updateDuration);
+      }
+    };
+  }, [isVisible, videoId]);
 
   const loadState = useCallback(async () => {
     if (!session) return false;
@@ -240,12 +304,14 @@ function OverlayApp() {
 
       switch (type) {
         case 'read_completed':
-          deltaScore += READ_GAIN_SCORE;
-          deltaMinutes += READ_GAIN_MIN;
+          deltaScore += typeof data?.score === 'number' ? data.score : READ_GAIN_SCORE;
+          deltaMinutes += typeof data?.minutes === 'number' ? data.minutes : READ_GAIN_MIN;
           break;
         case 'watch_initiated': {
           const minutes = typeof data?.minutes === 'number' ? data.minutes : WATCH_COST_MIN;
           deltaMinutes -= minutes;
+          const score = typeof data?.score === 'number' ? data.score : 0;
+          deltaScore -= score;
           break;
         }
         case 'session_end': {
@@ -467,7 +533,11 @@ function OverlayApp() {
     if (!session) return;
     setIsVisible(false);
     setIsLoading(false);
-    const updated = await sendEvent('watch_initiated', { minutes: 10, videoId });
+    const updated = await sendEvent('watch_initiated', {
+      minutes: watchCostMinutes,
+      videoId,
+      score: watchScorePenalty
+    });
     if (updated) {
       setMetrics({
         level: updated.level,
@@ -477,12 +547,16 @@ function OverlayApp() {
     } else {
       await loadState();
     }
-  }, [sendEvent, videoId, session, loadState]);
+  }, [sendEvent, videoId, session, loadState, watchCostMinutes, watchScorePenalty]);
 
   const handleReadFirst = useCallback(async () => {
     if (!session) return;
     setIsLoading(true);
-    const updated = await sendEvent('read_completed', { videoId });
+    const updated = await sendEvent('read_completed', {
+      videoId,
+      minutes: readGainMinutes,
+      score: readScoreGain
+    });
     if (updated) {
       setMetrics({
         level: updated.level,
@@ -492,7 +566,7 @@ function OverlayApp() {
     } else {
       await loadState();
     }
-  }, [sendEvent, videoId, session, loadState]);
+  }, [sendEvent, videoId, session, loadState, readGainMinutes, readScoreGain]);
 
   const handleLogin = useCallback(async () => {
     if (!supabase) {
@@ -538,6 +612,10 @@ function OverlayApp() {
       authError={authError}
       authInProgress={authInProgress}
       metrics={metrics}
+      watchCostMinutes={watchCostMinutes}
+      readGainMinutes={readGainMinutes}
+      readScoreGain={readScoreGain}
+      watchScorePenalty={watchScorePenalty}
       quote={quotes[quoteIndex]}
       onLogin={handleLogin}
       onReadFirst={handleReadFirst}

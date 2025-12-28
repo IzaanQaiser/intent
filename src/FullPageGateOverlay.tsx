@@ -10,6 +10,10 @@ type FullPageGateOverlayProps = {
   isVisible: boolean;
   isLoading: boolean;
   metrics: Metrics | null;
+  watchCostMinutes: number;
+  readGainMinutes: number;
+  readScoreGain: number;
+  watchScorePenalty: number;
   quote: string;
   isAuthenticated: boolean;
   authError: string | null;
@@ -19,15 +23,16 @@ type FullPageGateOverlayProps = {
   onWatchNow: () => void;
 };
 
-const READ_GAIN_SCORE = 40;
-const READ_GAIN_MIN = 5;
-const WATCH_COST_MIN = 10;
 const SCORE_PENALTY = 10;
 
 export default function FullPageGateOverlay({
   isVisible,
   isLoading,
   metrics,
+  watchCostMinutes,
+  readGainMinutes,
+  readScoreGain,
+  watchScorePenalty,
   quote,
   isAuthenticated,
   authError,
@@ -166,14 +171,26 @@ export default function FullPageGateOverlay({
   }, [isAuthenticated]);
 
   const currentLevel = Math.floor(safeMetrics.readScore / 400) + 1;
-  const levelAfterRead = Math.floor((safeMetrics.readScore + READ_GAIN_SCORE) / 400) + 1;
-  const balanceAfterWatch = safeMetrics.watchBalanceMinutes - WATCH_COST_MIN;
+  const levelAfterRead = Math.floor((safeMetrics.readScore + readScoreGain) / 400) + 1;
+  const nextLevelScore = currentLevel * 400;
+  const scoreToNextLevel = Math.max(0, nextLevelScore - safeMetrics.readScore);
+  const balanceAfterWatch = safeMetrics.watchBalanceMinutes - watchCostMinutes;
   const afterWatchScore =
-    balanceAfterWatch < 0 ? safeMetrics.readScore - SCORE_PENALTY : safeMetrics.readScore;
+    safeMetrics.readScore -
+    watchScorePenalty -
+    (balanceAfterWatch < 0 ? SCORE_PENALTY : 0);
   const levelAfterPenalty = Math.floor(afterWatchScore / 400) + 1;
   const levelIndicator = levelAfterRead > currentLevel ? '↑' : '=';
+  const formatMinutes = (value: number) =>
+    Number.isInteger(value) ? String(value) : value.toFixed(1);
   const balanceLabel =
     balanceAfterWatch >= 0 ? `${balanceAfterWatch} min` : `-${Math.abs(balanceAfterWatch)} min`;
+  const readBalanceAfter = safeMetrics.watchBalanceMinutes + readGainMinutes;
+  const readGainLabel = formatMinutes(readGainMinutes);
+  const readBalanceLabel =
+    readBalanceAfter >= 0
+      ? `+${formatMinutes(readBalanceAfter)}m`
+      : `-${formatMinutes(Math.abs(readBalanceAfter))}m`;
   const fillWidth = buttonWidth * holdProgress;
   const labelFillWidth = Math.max(
     0,
@@ -224,22 +241,14 @@ export default function FullPageGateOverlay({
             <div className="intent-overlay__choice">
               <div className="intent-overlay__choice-title">Your Choice</div>
               <div className="intent-overlay__choice-grid">
-                <div className="intent-overlay__choice-card">
-                  <div className="intent-overlay__choice-header">Read Instead</div>
-                  <div className="intent-overlay__choice-chips">
-                    <span className="intent-overlay__chip">Score +{READ_GAIN_SCORE}</span>
-                    <span className="intent-overlay__chip">Watch Balance +{READ_GAIN_MIN}m</span>
-                    <span className="intent-overlay__chip">
-                      Level {levelAfterRead} {levelIndicator}
-                    </span>
-                  </div>
-                  <div className="intent-overlay__choice-note">Reading restores progress.</div>
-                </div>
                 <div className="intent-overlay__choice-card intent-overlay__choice-card--watch">
                   <div className="intent-overlay__choice-header">Watch Now</div>
                   <div className="intent-overlay__choice-chips">
                     <span className="intent-overlay__chip intent-overlay__chip--warn">
-                      Watch Balance -{WATCH_COST_MIN}m
+                      Score -{watchScorePenalty}
+                    </span>
+                    <span className="intent-overlay__chip intent-overlay__chip--warn">
+                      Watch Balance -{watchCostMinutes}m
                     </span>
                     <span className="intent-overlay__chip intent-overlay__chip--highlight">
                       New Watch Balance {balanceLabel}
@@ -248,7 +257,7 @@ export default function FullPageGateOverlay({
                   {balanceAfterWatch < 0 ? (
                     <>
                       <div className="intent-overlay__choice-subline">
-                        Score penalty -{SCORE_PENALTY} (attention debt)
+                        Additional score penalty -{SCORE_PENALTY} (attention debt)
                       </div>
                       <div className="intent-overlay__choice-subline">
                         Level progress paused while negative
@@ -261,21 +270,33 @@ export default function FullPageGateOverlay({
                     </>
                   ) : (
                     <div className="intent-overlay__choice-subline">
-                      No score penalty (balance stays non-negative)
+                      No additional score penalty (balance stays non-negative)
                     </div>
                   )}
+                </div>
+                <div className="intent-overlay__choice-card intent-overlay__choice-card--read">
+                  <div className="intent-overlay__choice-header">Read Instead</div>
+                  <div className="intent-overlay__choice-chips">
+                    <span className="intent-overlay__chip">Score +{readScoreGain}</span>
+                    <span className="intent-overlay__chip">Watch Balance +{readGainLabel}m</span>
+                    <span className="intent-overlay__chip intent-overlay__chip--highlight">
+                      New Watch Balance {readBalanceLabel}
+                    </span>
+                    <span className="intent-overlay__chip">
+                      Level {levelAfterRead} {levelIndicator}
+                    </span>
+                  </div>
+                  <div className="intent-overlay__choice-note intent-overlay__choice-note--progress">
+                    <span className="intent-overlay__choice-note-label">
+                      Level {currentLevel + 1} in
+                    </span>
+                    <span className="intent-overlay__choice-note-score">{scoreToNextLevel}</span>
+                    <span className="intent-overlay__choice-note-unit">pts</span>
+                  </div>
                 </div>
               </div>
             </div>
             <div className="intent-overlay__actions">
-              <button
-                className="intent-overlay__primary"
-                type="button"
-                onClick={onReadFirst}
-                disabled={isLoading}
-              >
-                {isLoading ? 'Generating summary…' : 'Read Instead'}
-              </button>
               <button
                 className="intent-overlay__secondary"
                 type="button"
@@ -291,13 +312,35 @@ export default function FullPageGateOverlay({
                 />
                 <span className="intent-overlay__button-label intent-overlay__button-label--progress">
                   <span ref={labelRef} className="intent-overlay__button-label-base">
-                    Watch Now
+                    Watch Now (Watch Balance -{watchCostMinutes}m)
                   </span>
                   <span
                     className="intent-overlay__button-label-fill"
                     style={{ ['--label-fill-px' as string]: `${labelFillPx}px` }}
                   >
-                    Watch Now
+                    Watch Now (Watch Balance -{watchCostMinutes}m)
+                  </span>
+                </span>
+              </button>
+              <button
+                className={`intent-overlay__primary intent-overlay__primary--read${
+                  isLoading ? ' intent-overlay__primary--read-active' : ''
+                }`}
+                type="button"
+                onClick={onReadFirst}
+                disabled={isLoading}
+              >
+                <span className="intent-overlay__press-fill" />
+                <span className="intent-overlay__button-label intent-overlay__button-label--progress">
+                  <span className="intent-overlay__button-label-base">
+                    {isLoading
+                      ? 'Generating summary…'
+                      : `Read Instead (Watch Balance +${readGainLabel}m)`}
+                  </span>
+                  <span className="intent-overlay__button-label-fill">
+                    {isLoading
+                      ? 'Generating summary…'
+                      : `Read Instead (Watch Balance +${readGainLabel}m)`}
                   </span>
                 </span>
               </button>

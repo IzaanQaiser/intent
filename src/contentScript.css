@@ -144,6 +144,12 @@
   border: 1px solid #d7a8a3;
 }
 
+.intent-overlay__choice-card--read {
+  background: #e1f2e6;
+  color: #1d3b26;
+  border: 1px solid #96c6a3;
+}
+
 .intent-overlay__choice-header {
   font-size: 16px;
   font-weight: 600;
@@ -173,6 +179,16 @@
   color: #4a1d1a;
 }
 
+.intent-overlay__choice-card--watch .intent-overlay__chip:not(.intent-overlay__chip--warn):not(.intent-overlay__chip--highlight) {
+  background: #f1cfc9;
+  color: #4a1d1a;
+}
+
+.intent-overlay__choice-card--read .intent-overlay__chip {
+  background: #cde9d2;
+  color: #1d3b26;
+}
+
 .intent-overlay__chip--warn {
   background: rgba(194, 72, 46, 0.28);
   color: #f7efe6;
@@ -181,6 +197,11 @@
 .intent-overlay__choice-card--watch .intent-overlay__chip--warn {
   background: rgba(194, 72, 46, 0.22);
   color: #4a1d1a;
+}
+
+.intent-overlay__choice-card--read .intent-overlay__chip--warn {
+  background: rgba(47, 122, 72, 0.2);
+  color: #1d3b26;
 }
 
 .intent-overlay__chip--highlight {
@@ -192,6 +213,22 @@
   animation: intent-chip-pulse 1.6s ease-in-out infinite;
 }
 
+.intent-overlay__choice-card--read .intent-overlay__chip--highlight {
+  color: #1d3b26;
+  border: 1px solid #2f7a48;
+  box-shadow: 0 0 0 2px rgba(47, 122, 72, 0.18);
+  animation: intent-chip-pulse-green 1.6s ease-in-out infinite;
+}
+
+@keyframes intent-chip-pulse-green {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px rgba(47, 122, 72, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(47, 122, 72, 0.28);
+  }
+}
 @keyframes intent-chip-pulse {
   0%,
   100% {
@@ -216,6 +253,49 @@
 
 .intent-overlay__choice-card--watch .intent-overlay__choice-note {
   color: #6d5f52;
+}
+
+.intent-overlay__choice-card--read .intent-overlay__choice-note {
+  color: #2f6641;
+}
+
+.intent-overlay__choice-note--progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #d7efe0;
+  border: 1px solid #96c6a3;
+  color: #1d3b26;
+  font-weight: 600;
+}
+
+.intent-overlay__choice-note-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #2f6641;
+}
+
+.intent-overlay__choice-note-score {
+  font-size: inherit;
+  font-weight: inherit;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  border: none;
+  color: #1d3b26;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.intent-overlay__choice-note-unit {
+  font-size: 12px;
+  color: #2f6641;
 }
 
 .intent-overlay__choice-warning {
@@ -253,6 +333,37 @@
   background: #201b15;
   color: #fdf7f0;
   flex: 1 1 200px;
+}
+
+.intent-overlay__primary--read {
+  background: #e1f2e6;
+  color: #1d3b26;
+  border: 1px solid #2f7a48;
+}
+
+.intent-overlay__primary--read:hover {
+  background: rgba(47, 122, 72, 0.12);
+}
+
+.intent-overlay__primary--read:disabled {
+  background: rgba(47, 122, 72, 0.08);
+  color: #5a7c64;
+}
+
+.intent-overlay__press-fill {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  background: #2f7a48;
+  transform: scaleX(0);
+  transform-origin: left;
+  z-index: 0;
+}
+
+.intent-overlay__primary--read:active .intent-overlay__press-fill,
+.intent-overlay__primary--read-active .intent-overlay__press-fill {
+  transform: scaleX(1);
+  transition: none;
 }
 
 .intent-overlay__primary:disabled {
@@ -301,6 +412,21 @@
   color: #ffffff;
   clip-path: inset(0 calc(100% - var(--label-fill-px, 0px)) 0 0);
   pointer-events: none;
+}
+
+.intent-overlay__primary--read .intent-overlay__button-label-base {
+  color: #1d3b26;
+}
+
+.intent-overlay__primary--read .intent-overlay__button-label-fill {
+  color: #ffffff;
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 10ms ease-out 0.05s;
+}
+
+.intent-overlay__primary--read:active .intent-overlay__button-label-fill,
+.intent-overlay__primary--read-active .intent-overlay__button-label-fill {
+  clip-path: inset(0 0 0 0);
 }
 
 .intent-overlay__loading {
