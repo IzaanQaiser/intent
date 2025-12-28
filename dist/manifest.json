@@ -15,7 +15,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/contentScript.tsx-loader-CAASu3m2.js"
+        "assets/contentScript.tsx-loader-C3q9lSBo.js"
       ],
       "matches": [
         "https://www.youtube.com/*"
@@ -51,7 +51,7 @@
       "resources": [
         "assets/client-DMp2t5-j.js",
         "assets/supabaseClient-DihBYOwf.js",
-        "assets/contentScript.tsx-C9Eg6pCN.js"
+        "assets/contentScript.tsx-LL8WOf4K.js"
       ],
       "use_dynamic_url": false
     }

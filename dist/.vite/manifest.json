@@ -28,7 +28,7 @@
     ]
   },
   "contentScript.tsx-loader.js": {
-    "file": "assets/contentScript.tsx-loader-CAASu3m2.js",
+    "file": "assets/contentScript.tsx-loader-C3q9lSBo.js",
     "src": "contentScript.tsx-loader.js"
   },
   "index.html": {
@@ -64,7 +64,7 @@
     "isEntry": true
   },
   "src/contentScript.tsx": {
-    "file": "assets/contentScript.tsx-C9Eg6pCN.js",
+    "file": "assets/contentScript.tsx-LL8WOf4K.js",
     "name": "contentScript.tsx",
     "src": "src/contentScript.tsx",
     "isEntry": true,

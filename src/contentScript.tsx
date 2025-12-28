@@ -49,6 +49,15 @@ function pauseVideo() {
   }
 }
 
+function formatDuration(seconds: number) {
+  const total = Math.floor(seconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  const parts = hours > 0 ? [hours, minutes, secs] : [minutes, secs];
+  return parts.map((part) => String(part).padStart(2, '0')).join(':');
+}
+
 function useVideoId() {
   const [videoId, setVideoId] = useState(() => getVideoId(window.location.href));
 
@@ -392,7 +401,17 @@ function OverlayApp() {
       );
       if (response.ok && response.body?.transcript) {
         const source = response.body.source ? ` (${response.body.source})` : '';
-        console.log(`[Intent] Transcript${source} for ${videoId}:\n${response.body.transcript}`);
+        const url = `https://www.youtube.com/watch?v=${videoId}`;
+        const title =
+          document.querySelector('h1 yt-formatted-string')?.textContent?.trim() ||
+          document.title.replace(/\s+-\s+YouTube$/i, '').trim() ||
+          'Unknown';
+        const video = document.querySelector<HTMLVideoElement>('video');
+        const length =
+          video && Number.isFinite(video.duration) ? formatDuration(video.duration) : 'Unknown';
+        console.log(
+          `[Intent]\nURL: ${url}\nLENGTH: ${length}\nTITLE: ${title}\nTRANSCRIPT:${source}\n${response.body.transcript}`
+        );
       } else {
         console.warn(`[Intent] Transcript unavailable for ${videoId}.`);
       }
