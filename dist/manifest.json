@@ -15,14 +15,14 @@
   "content_scripts": [
     {
       "js": [
-        "assets/contentScript.tsx-loader-DUykKd-D.js"
+        "assets/contentScript.tsx-loader-D86RZIkN.js"
       ],
       "matches": [
         "https://www.youtube.com/*"
       ],
       "run_at": "document_idle",
       "css": [
-        "assets/contentScript-BQZoAbsM.css"
+        "assets/contentScript-D4zt9UON.css"
       ]
     }
   ],
@@ -51,7 +51,7 @@
       "resources": [
         "assets/client-DMp2t5-j.js",
         "assets/supabaseClient-DihBYOwf.js",
-        "assets/contentScript.tsx-DNRtH6DM.js"
+        "assets/contentScript.tsx-BBtyZ7w0.js"
       ],
       "use_dynamic_url": false
     }

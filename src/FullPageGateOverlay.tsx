@@ -397,7 +397,9 @@ export default function FullPageGateOverlay({
             showHoldMotto ? ' intent-overlay__motto--visible' : ''
           }`}
         >
-          Old ways dont open new doors
+          <span className="intent-overlay__motto-red">Old ways</span>
+          <span className="intent-overlay__motto-neutral"> dont open </span>
+          <span className="intent-overlay__motto-green">new doors</span>
         </div>
       </div>
     </div>
