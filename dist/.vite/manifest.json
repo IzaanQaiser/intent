@@ -28,7 +28,7 @@
     ]
   },
   "contentScript.tsx-loader.js": {
-    "file": "assets/contentScript.tsx-loader-D86RZIkN.js",
+    "file": "assets/contentScript.tsx-loader-WiNr3oJI.js",
     "src": "contentScript.tsx-loader.js"
   },
   "index.html": {
@@ -64,7 +64,7 @@
     "isEntry": true
   },
   "src/contentScript.tsx": {
-    "file": "assets/contentScript.tsx-BBtyZ7w0.js",
+    "file": "assets/contentScript.tsx-C5Q3xvUE.js",
     "name": "contentScript.tsx",
     "src": "src/contentScript.tsx",
     "isEntry": true,
@@ -73,7 +73,7 @@
       "_supabaseClient-DihBYOwf.js"
     ],
     "css": [
-      "assets/contentScript-D4zt9UON.css"
+      "assets/contentScript-CX8ipvs9.css"
     ]
   }
 }

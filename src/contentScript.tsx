@@ -11,6 +11,8 @@ const READ_GAIN_SCORE = 40;
 const READ_GAIN_MIN = 5;
 const WATCH_COST_MIN = 10;
 const SCORE_PENALTY = 10;
+const SUMMARY_WORDS_PER_MINUTE = 200;
+const MIN_CLAIM_SECONDS = 15;
 
 const computeLevel = (readScore: number) => Math.floor(readScore / 400) + 1;
 const VIDEO_ROUND_UP_THRESHOLD_SEC = 30;
@@ -20,6 +22,38 @@ type Metrics = {
   readScore: number;
   watchBalanceMinutes: number;
 };
+
+type SummaryData = {
+  title: string;
+  summary: string;
+  keyPoints: string[];
+  readingTimeMinutes: number;
+  source?: string;
+  language?: string;
+};
+
+function countWords(text: string) {
+  if (!text) return 0;
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function estimateSummaryReadSeconds(summary: SummaryData | null) {
+  if (!summary) return 0;
+  const baseWords = countWords(summary.summary);
+  const keyPointWords = summary.keyPoints?.reduce((total, point) => total + countWords(point), 0) ?? 0;
+  const totalWords = baseWords + keyPointWords;
+  if (totalWords === 0) return 0;
+  const seconds = Math.round((totalWords / SUMMARY_WORDS_PER_MINUTE) * 60);
+  return Math.max(MIN_CLAIM_SECONDS, seconds);
+}
+
+function formatCountdown(seconds: number) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (mins <= 0) return `${secs}s`;
+  return `${mins}:${String(secs).padStart(2, '0')}`;
+}
+
 
 type ApiResponse<T> =
   | { ok: true; status: number; body: T | null }
@@ -57,6 +91,22 @@ function formatDuration(seconds: number) {
   const secs = total % 60;
   const parts = hours > 0 ? [hours, minutes, secs] : [minutes, secs];
   return parts.map((part) => String(part).padStart(2, '0')).join(':');
+}
+
+function getVideoTitle() {
+  return (
+    document.querySelector('h1 yt-formatted-string')?.textContent?.trim() ||
+    document.title.replace(/\s+-\s+YouTube$/i, '').trim() ||
+    'Untitled video'
+  );
+}
+
+function getVideoDurationSeconds() {
+  const video = document.querySelector<HTMLVideoElement>('video');
+  if (!video || !Number.isFinite(video.duration)) {
+    return null;
+  }
+  return video.duration;
 }
 
 function getReadScoreGain(watchCostMinutes: number) {
@@ -124,10 +174,15 @@ function OverlayApp() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authInProgress, setAuthInProgress] = useState(false);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
+  const [summary, setSummary] = useState<SummaryData | null>(null);
+  const [isClaimingRewards, setIsClaimingRewards] = useState(false);
+  const [hasClaimedRewards, setHasClaimedRewards] = useState(false);
+  const [claimSecondsRemaining, setClaimSecondsRemaining] = useState(0);
   const [session, setSession] = useState<Session | null>(null);
   const [watchCostMinutes, setWatchCostMinutes] = useState(WATCH_COST_MIN);
   const latestVideoId = useRef<string | null>(videoId);
   const transcriptLoggedRef = useRef<string | null>(null);
+  const claimDeadlineRef = useRef<number | null>(null);
   const loadStateRef = useRef<() => Promise<boolean>>(async () => false);
   const readGainMinutes = useMemo(() => watchCostMinutes / 2, [watchCostMinutes]);
   const readScoreGain = useMemo(() => getReadScoreGain(watchCostMinutes), [watchCostMinutes]);
@@ -165,6 +220,7 @@ function OverlayApp() {
       }),
     []
   );
+
 
   const getStateRowFromSupabase = useCallback(async () => {
     if (!supabase) {
@@ -221,9 +277,39 @@ function OverlayApp() {
       setIsVisible(true);
       setIsLoading(false);
       setWatchCostMinutes(WATCH_COST_MIN);
+      setSummary(null);
+      setHasClaimedRewards(false);
+      setIsClaimingRewards(false);
+      setClaimSecondsRemaining(0);
+      claimDeadlineRef.current = null;
       transcriptLoggedRef.current = null;
     }
   }, [videoId]);
+
+  useEffect(() => {
+    if (!summary) {
+      setClaimSecondsRemaining(0);
+      claimDeadlineRef.current = null;
+      return;
+    }
+    const seconds = estimateSummaryReadSeconds(summary);
+    const deadline = Date.now() + seconds * 1000;
+    claimDeadlineRef.current = deadline;
+    setClaimSecondsRemaining(seconds);
+    if (seconds === 0) return;
+
+    const intervalId = window.setInterval(() => {
+      if (!claimDeadlineRef.current) return;
+      const remainingMs = claimDeadlineRef.current - Date.now();
+      const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+      setClaimSecondsRemaining(remainingSeconds);
+      if (remainingSeconds <= 0) {
+        window.clearInterval(intervalId);
+      }
+    }, 500);
+
+    return () => window.clearInterval(intervalId);
+  }, [summary]);
 
   useEffect(() => {
     if (!isVisible || !videoId) return;
@@ -416,6 +502,11 @@ function OverlayApp() {
   useEffect(() => {
     if (!session) {
       setMetrics(null);
+      setSummary(null);
+      setHasClaimedRewards(false);
+      setIsClaimingRewards(false);
+      setClaimSecondsRemaining(0);
+      claimDeadlineRef.current = null;
     }
   }, [session]);
 
@@ -552,6 +643,38 @@ function OverlayApp() {
   const handleReadFirst = useCallback(async () => {
     if (!session) return;
     setIsLoading(true);
+    setSummary(null);
+    setHasClaimedRewards(false);
+    setIsClaimingRewards(false);
+    const title = getVideoTitle();
+    const durationSeconds = getVideoDurationSeconds();
+
+    const summaryResponse = await requestFromBackground<SummaryData>(`${API_BASE_URL}/summarize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        videoId,
+        title,
+        durationSeconds
+      })
+    });
+
+    if (summaryResponse.ok && summaryResponse.body?.summary) {
+      setSummary(summaryResponse.body);
+    } else {
+      console.warn('[Intent] Summary unavailable', {
+        videoId,
+        status: summaryResponse.status,
+        error: summaryResponse.error,
+        body: summaryResponse.body
+      });
+    }
+    setIsLoading(false);
+  }, [videoId, session, requestFromBackground]);
+
+  const handleClaimRewards = useCallback(async () => {
+    if (!session || !summary || isClaimingRewards || hasClaimedRewards || claimSecondsRemaining > 0) return;
+    setIsClaimingRewards(true);
     const updated = await sendEvent('read_completed', {
       videoId,
       minutes: readGainMinutes,
@@ -566,7 +689,21 @@ function OverlayApp() {
     } else {
       await loadState();
     }
-  }, [sendEvent, videoId, session, loadState, readGainMinutes, readScoreGain]);
+    setHasClaimedRewards(true);
+    setIsClaimingRewards(false);
+    window.location.assign('https://www.youtube.com/');
+  }, [
+    session,
+    summary,
+    isClaimingRewards,
+    hasClaimedRewards,
+    claimSecondsRemaining,
+    sendEvent,
+    videoId,
+    readGainMinutes,
+    readScoreGain,
+    loadState
+  ]);
 
   const handleLogin = useCallback(async () => {
     if (!supabase) {
@@ -616,10 +753,16 @@ function OverlayApp() {
       readGainMinutes={readGainMinutes}
       readScoreGain={readScoreGain}
       watchScorePenalty={watchScorePenalty}
+      summary={summary}
+      isClaimingRewards={isClaimingRewards}
+      hasClaimedRewards={hasClaimedRewards}
+      claimSecondsRemaining={claimSecondsRemaining}
+      claimCountdownLabel={formatCountdown(claimSecondsRemaining)}
       quote={quotes[quoteIndex]}
       onLogin={handleLogin}
       onReadFirst={handleReadFirst}
       onWatchNow={handleWatchNow}
+      onClaimRewards={handleClaimRewards}
     />
   );
 }

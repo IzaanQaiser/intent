@@ -6,6 +6,15 @@ type Metrics = {
   watchBalanceMinutes: number;
 };
 
+type SummaryData = {
+  title: string;
+  summary: string;
+  keyPoints: string[];
+  readingTimeMinutes: number;
+  source?: string;
+  language?: string;
+};
+
 type FullPageGateOverlayProps = {
   isVisible: boolean;
   isLoading: boolean;
@@ -14,6 +23,11 @@ type FullPageGateOverlayProps = {
   readGainMinutes: number;
   readScoreGain: number;
   watchScorePenalty: number;
+  summary: SummaryData | null;
+  isClaimingRewards: boolean;
+  hasClaimedRewards: boolean;
+  claimSecondsRemaining: number;
+  claimCountdownLabel: string;
   quote: string;
   isAuthenticated: boolean;
   authError: string | null;
@@ -21,6 +35,7 @@ type FullPageGateOverlayProps = {
   onLogin: () => void;
   onReadFirst: () => void;
   onWatchNow: () => void;
+  onClaimRewards: () => void;
 };
 
 const SCORE_PENALTY = 10;
@@ -33,13 +48,19 @@ export default function FullPageGateOverlay({
   readGainMinutes,
   readScoreGain,
   watchScorePenalty,
+  summary,
+  isClaimingRewards,
+  hasClaimedRewards,
+  claimSecondsRemaining,
+  claimCountdownLabel,
   quote,
   isAuthenticated,
   authError,
   authInProgress,
   onLogin,
   onReadFirst,
-  onWatchNow
+  onWatchNow,
+  onClaimRewards
 }: FullPageGateOverlayProps) {
   if (!isVisible) return null;
   if (isAuthenticated && !metrics) {
@@ -222,6 +243,11 @@ export default function FullPageGateOverlay({
     balanceAfterWatch >= 0 ? `${balanceAfterWatch} min` : `-${Math.abs(balanceAfterWatch)} min`;
   const readBalanceAfter = safeMetrics.watchBalanceMinutes + readGainMinutes;
   const readGainLabel = formatMinutes(readGainMinutes);
+  const rewardLabel = `+${readScoreGain} score, +${readGainLabel}m`;
+  const claimLocked = claimSecondsRemaining > 0;
+  const claimLabel = claimLocked
+    ? `Read for ${claimCountdownLabel} to claim rewards`
+    : `Claim your reading rewards (${rewardLabel})`;
   const readBalanceLabel =
     readBalanceAfter >= 0
       ? `+${formatMinutes(readBalanceAfter)}m`
@@ -280,68 +306,105 @@ export default function FullPageGateOverlay({
             </div>
           )}
           {isAuthenticated ? (
-            <div className="intent-overlay__choice">
-              <div className="intent-overlay__choice-title">Your Choice</div>
-              <div className="intent-overlay__choice-grid">
-                <div className="intent-overlay__choice-card intent-overlay__choice-card--watch">
-                  <div className="intent-overlay__choice-header">Watch Now</div>
-                  <div className="intent-overlay__choice-chips">
-                    <span className="intent-overlay__chip intent-overlay__chip--warn">
-                      Score -{watchScorePenalty}
-                    </span>
-                    <span className="intent-overlay__chip intent-overlay__chip--warn">
-                      Watch Balance -{watchCostMinutes}m
-                    </span>
-                    <span className="intent-overlay__chip intent-overlay__chip--highlight">
-                      New Watch Balance {balanceLabel}
-                    </span>
-                    <span className="intent-overlay__chip">
-                      Level {levelAfterPenalty} {watchLevelIndicator}
-                    </span>
+            summary ? (
+              <div className="intent-overlay__summary">
+                <div className="intent-overlay__summary-header">
+                  <div className="intent-overlay__summary-title">
+                    {summary.title || 'Read First Brief'}
                   </div>
-                  {balanceAfterWatch < 0 ? (
-                    <>
-                      <div className="intent-overlay__choice-subline">
-                        Additional score penalty -{SCORE_PENALTY} (attention debt)
-                      </div>
-                      <div className="intent-overlay__choice-subline">
-                        Level progress paused while negative
-                      </div>
-                      {levelAfterPenalty < currentLevel ? (
-                        <div className="intent-overlay__choice-warning">
-                          ⚠️ Risk: Level down to {levelAfterPenalty}
-                        </div>
-                      ) : null}
-                    </>
-                  ) : (
-                    null
-                  )}
+                  <div className="intent-overlay__summary-meta">
+                    {summary.readingTimeMinutes} min read
+                  </div>
                 </div>
-                <div className="intent-overlay__choice-card intent-overlay__choice-card--read">
-                  <div className="intent-overlay__choice-header">Read Instead</div>
-                  <div className="intent-overlay__choice-chips">
-                    <span className="intent-overlay__chip">Score +{readScoreGain}</span>
-                    <span className="intent-overlay__chip">Watch Balance +{readGainLabel}m</span>
-                    <span className="intent-overlay__chip intent-overlay__chip--highlight">
-                      New Watch Balance {readBalanceLabel}
-                    </span>
-                    <span className="intent-overlay__chip">
-                      Level {levelAfterRead} {levelIndicator}
-                    </span>
+                <div className="intent-overlay__summary-body">
+                  {summary.summary ? (
+                    <div className="intent-overlay__summary-text">{summary.summary}</div>
+                  ) : null}
+                  {summary.keyPoints?.length ? (
+                    <ul className="intent-overlay__summary-list">
+                      {summary.keyPoints.map((point, index) => (
+                        <li key={`${index}-${point.slice(0, 16)}`}>{point}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+                <button
+                  className="intent-overlay__summary-claim"
+                  type="button"
+                  onClick={onClaimRewards}
+                  disabled={isClaimingRewards || hasClaimedRewards || claimLocked}
+                >
+                  {hasClaimedRewards
+                    ? 'Rewards claimed'
+                    : isClaimingRewards
+                      ? 'Claiming rewards...'
+                      : claimLabel}
+                </button>
+              </div>
+            ) : (
+              <div className="intent-overlay__choice">
+                <div className="intent-overlay__choice-title">Your Choice</div>
+                <div className="intent-overlay__choice-grid">
+                  <div className="intent-overlay__choice-card intent-overlay__choice-card--watch">
+                    <div className="intent-overlay__choice-header">Watch Now</div>
+                    <div className="intent-overlay__choice-chips">
+                      <span className="intent-overlay__chip intent-overlay__chip--warn">
+                        Score -{watchScorePenalty}
+                      </span>
+                      <span className="intent-overlay__chip intent-overlay__chip--warn">
+                        Watch Balance -{watchCostMinutes}m
+                      </span>
+                      <span className="intent-overlay__chip intent-overlay__chip--highlight">
+                        New Watch Balance {balanceLabel}
+                      </span>
+                      <span className="intent-overlay__chip">
+                        Level {levelAfterPenalty} {watchLevelIndicator}
+                      </span>
+                    </div>
+                    {balanceAfterWatch < 0 ? (
+                      <>
+                        <div className="intent-overlay__choice-subline">
+                          Additional score penalty -{SCORE_PENALTY} (attention debt)
+                        </div>
+                        <div className="intent-overlay__choice-subline">
+                          Level progress paused while negative
+                        </div>
+                        {levelAfterPenalty < currentLevel ? (
+                          <div className="intent-overlay__choice-warning">
+                            ⚠️ Risk: Level down to {levelAfterPenalty}
+                          </div>
+                        ) : null}
+                      </>
+                    ) : (
+                      null
+                    )}
                   </div>
-                  <div className="intent-overlay__choice-note intent-overlay__choice-note--progress">
-                    <span className="intent-overlay__choice-note-label">
-                      Level {currentLevel + 1} in
-                    </span>
-                    <span className="intent-overlay__choice-note-score">{scoreToNextLevel}</span>
-                    <span className="intent-overlay__choice-note-unit">pts</span>
+                  <div className="intent-overlay__choice-card intent-overlay__choice-card--read">
+                    <div className="intent-overlay__choice-header">Read Instead</div>
+                    <div className="intent-overlay__choice-chips">
+                      <span className="intent-overlay__chip">Score +{readScoreGain}</span>
+                      <span className="intent-overlay__chip">Watch Balance +{readGainLabel}m</span>
+                      <span className="intent-overlay__chip intent-overlay__chip--highlight">
+                        New Watch Balance {readBalanceLabel}
+                      </span>
+                      <span className="intent-overlay__chip">
+                        Level {levelAfterRead} {levelIndicator}
+                      </span>
+                    </div>
+                    <div className="intent-overlay__choice-note intent-overlay__choice-note--progress">
+                      <span className="intent-overlay__choice-note-label">
+                        Level {currentLevel + 1} in
+                      </span>
+                      <span className="intent-overlay__choice-note-score">{scoreToNextLevel}</span>
+                      <span className="intent-overlay__choice-note-unit">pts</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )
           ) : null}
         </div>
-        {isAuthenticated ? (
+        {isAuthenticated && !summary ? (
           <div className="intent-overlay__actions">
             <button
               className="intent-overlay__secondary"
