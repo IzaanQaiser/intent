@@ -2,3 +2,5 @@
 - make the extenstion html page better
 - leaderboard for motivation
 - make read summary generation better
+- reading streak
+- multiplied losses when negative

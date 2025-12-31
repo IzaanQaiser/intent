@@ -3,8 +3,10 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { execFile } from 'child_process';
+import { createHmac, randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { VertexAI } from '@google-cloud/vertexai';
+import { Kafka, Partitioners } from 'kafkajs';
 
 dotenv.config();
 
@@ -40,6 +42,17 @@ const VERTEX_MODEL_FALLBACKS = [
   'gemini-1.0-pro-001'
 ];
 const MAX_TRANSCRIPT_CHARS = 20000;
+const CONFLUENT_BOOTSTRAP_SERVERS = process.env.CONFLUENT_BOOTSTRAP_SERVERS;
+const CONFLUENT_API_KEY = process.env.CONFLUENT_API_KEY;
+const CONFLUENT_API_SECRET = process.env.CONFLUENT_API_SECRET;
+const CONFLUENT_TOPIC = process.env.CONFLUENT_TOPIC || 'attention.events.v1';
+const CONFLUENT_CLIENT_ID = process.env.CONFLUENT_CLIENT_ID || 'intent-extension';
+const EVENT_HASH_SALT = process.env.EVENT_HASH_SALT || 'intent';
+const CONFLUENT_ENABLED = Boolean(
+  CONFLUENT_BOOTSTRAP_SERVERS && CONFLUENT_API_KEY && CONFLUENT_API_SECRET
+);
+
+let confluentProducer: ReturnType<Kafka['producer']> | null = null;
 
 type ExecResult = {
   code: number;
@@ -119,6 +132,83 @@ type SummaryResult = {
   keyPoints: string[];
   readingTimeMinutes: number;
 };
+
+type StreamEvent = {
+  event_id: string;
+  event_type: string;
+  timestamp: string;
+  user_id: string;
+  session_id?: string;
+  video_id?: string;
+  data?: Record<string, unknown>;
+  context?: Record<string, unknown>;
+};
+
+function hashUserId(userId: string) {
+  return createHmac('sha256', EVENT_HASH_SALT).update(userId).digest('hex');
+}
+
+async function getConfluentProducer() {
+  if (!CONFLUENT_ENABLED) return null;
+  if (confluentProducer) return confluentProducer;
+  const brokers = CONFLUENT_BOOTSTRAP_SERVERS?.split(',').map((broker) => broker.trim()).filter(Boolean) ?? [];
+  if (brokers.length === 0) return null;
+  const kafka = new Kafka({
+    clientId: CONFLUENT_CLIENT_ID,
+    brokers,
+    ssl: true,
+    sasl: {
+      mechanism: 'plain',
+      username: CONFLUENT_API_KEY ?? '',
+      password: CONFLUENT_API_SECRET ?? ''
+    }
+  });
+  const producer = kafka.producer({ createPartitioner: Partitioners.LegacyPartitioner });
+  try {
+    await producer.connect();
+  } catch (error) {
+    await producer.disconnect().catch(() => undefined);
+    throw error;
+  }
+  confluentProducer = producer;
+  return producer;
+}
+
+async function publishStreamEvent(event: StreamEvent) {
+  if (!CONFLUENT_ENABLED) {
+    return { ok: false, skipped: true } as const;
+  }
+  const sendEvent = async () => {
+    const producer = await getConfluentProducer();
+    if (!producer) {
+      return { ok: false, skipped: true } as const;
+    }
+    await producer.send({
+      topic: CONFLUENT_TOPIC,
+      messages: [
+        {
+          key: event.user_id,
+          value: JSON.stringify(event)
+        }
+      ]
+    });
+    return { ok: true } as const;
+  };
+
+  try {
+    return await sendEvent();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.toLowerCase().includes('producer is disconnected')) {
+      if (confluentProducer) {
+        await confluentProducer.disconnect().catch(() => undefined);
+        confluentProducer = null;
+      }
+      return await sendEvent();
+    }
+    throw error;
+  }
+}
 
 function normalizeModelName(value?: string) {
   if (!value) return null;
@@ -365,6 +455,54 @@ app.get('/state', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: String(error) });
+  }
+});
+
+app.post('/stream', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) {
+      res.status(401).json({ error: 'Missing auth token' });
+      return;
+    }
+    const { data: authData, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !authData.user) {
+      res.status(401).json({ error: 'Invalid auth token' });
+      return;
+    }
+    const userId = authData.user.id;
+    const { type, videoId, sessionId, data, context } = req.body || {};
+    if (!type) {
+      res.status(400).json({ error: 'Missing type' });
+      return;
+    }
+
+    const event: StreamEvent = {
+      event_id: randomUUID(),
+      event_type: String(type),
+      timestamp: new Date().toISOString(),
+      user_id: hashUserId(userId),
+      session_id: typeof sessionId === 'string' ? sessionId : undefined,
+      video_id: typeof videoId === 'string' ? videoId : undefined,
+      data: data && typeof data === 'object' ? data : undefined,
+      context: context && typeof context === 'object' ? context : undefined
+    };
+
+    try {
+      const result = await publishStreamEvent(event);
+      if (result.ok || result.skipped) {
+        res.json({ ok: true, streamed: result.ok });
+        return;
+      }
+      res.json({ ok: false, error: 'Failed to publish event' });
+    } catch (error) {
+      console.error('[stream] Publish failed', error);
+      res.json({ ok: false, error: String(error) });
+    }
+  } catch (error) {
+    console.error('[stream] Error', error);
+    res.json({ ok: false, error: String(error) });
   }
 });
 

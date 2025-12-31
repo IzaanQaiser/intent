@@ -13,6 +13,8 @@ const WATCH_COST_MIN = 10;
 const SCORE_PENALTY = 10;
 const SUMMARY_WORDS_PER_MINUTE = 200;
 const MIN_CLAIM_SECONDS = 15;
+const READ_PROGRESS_INTERVAL_MS = 15000;
+const WATCH_PROGRESS_INTERVAL_MS = 10000;
 
 const computeLevel = (readScore: number) => Math.floor(readScore / 400) + 1;
 const VIDEO_ROUND_UP_THRESHOLD_SEC = 30;
@@ -184,6 +186,19 @@ function OverlayApp() {
   const transcriptLoggedRef = useRef<string | null>(null);
   const claimDeadlineRef = useRef<number | null>(null);
   const loadStateRef = useRef<() => Promise<boolean>>(async () => false);
+  const sessionIdRef = useRef<string>(crypto.randomUUID());
+  const sessionStartRef = useRef<number>(Date.now());
+  const panelShownRef = useRef(false);
+  const summaryRequestedAtRef = useRef<number | null>(null);
+  const summaryShownAtRef = useRef<number | null>(null);
+  const readProgressTimerRef = useRef<number | null>(null);
+  const readProgressSecondsRef = useRef(0);
+  const watchTrackingRef = useRef(false);
+  const watchStartAtRef = useRef<number | null>(null);
+  const watchProgressTimerRef = useRef<number | null>(null);
+  const watchProgressLastSecondsRef = useRef(0);
+  const watchProgressSampleRef = useRef(0);
+  const watchEndedRef = useRef(false);
   const readGainMinutes = useMemo(() => watchCostMinutes / 2, [watchCostMinutes]);
   const readScoreGain = useMemo(() => getReadScoreGain(watchCostMinutes), [watchCostMinutes]);
   const watchScorePenalty = readScoreGain;
@@ -219,6 +234,59 @@ function OverlayApp() {
         }
       }),
     []
+  );
+
+  const getEventContext = useCallback(
+    () => ({
+      page: 'youtube_watch',
+      url: window.location.href
+    }),
+    []
+  );
+
+  const streamEvent = useCallback(
+    async (type: string, data?: Record<string, unknown>) => {
+      if (!session) return;
+      const payload = {
+        type,
+        videoId: videoId ?? undefined,
+        sessionId: sessionIdRef.current,
+        data,
+        context: getEventContext()
+      };
+      await requestFromBackground(`${API_BASE_URL}/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify(payload)
+      });
+    },
+    [session, videoId, requestFromBackground, getEventContext]
+  );
+
+  const emitIntentPanelShown = useCallback(() => {
+    if (!session || !videoId || panelShownRef.current) return;
+    panelShownRef.current = true;
+    const delayMs = Math.max(0, Date.now() - sessionStartRef.current);
+    void streamEvent('intent_panel_shown', {
+      delay_ms: delayMs,
+      videoId
+    });
+  }, [session, videoId, streamEvent]);
+
+  const emitWatchEnded = useCallback(
+    (endedBy: string) => {
+      if (!watchTrackingRef.current || watchEndedRef.current) return;
+      watchEndedRef.current = true;
+      const totalSeconds = Math.max(0, Math.round(watchProgressLastSecondsRef.current));
+      void streamEvent('watch_ended', {
+        total_watch_seconds: totalSeconds,
+        ended_by: endedBy
+      });
+    },
+    [streamEvent]
   );
 
 
@@ -273,7 +341,29 @@ function OverlayApp() {
 
   useEffect(() => {
     if (videoId && videoId !== latestVideoId.current) {
+      if (watchTrackingRef.current && !watchEndedRef.current) {
+        emitWatchEnded('navigation');
+      }
       latestVideoId.current = videoId;
+      sessionIdRef.current = crypto.randomUUID();
+      sessionStartRef.current = Date.now();
+      panelShownRef.current = false;
+      summaryRequestedAtRef.current = null;
+      summaryShownAtRef.current = null;
+      readProgressSecondsRef.current = 0;
+      watchTrackingRef.current = false;
+      watchStartAtRef.current = null;
+      watchProgressLastSecondsRef.current = 0;
+      watchProgressSampleRef.current = 0;
+      watchEndedRef.current = false;
+      if (readProgressTimerRef.current !== null) {
+        window.clearInterval(readProgressTimerRef.current);
+        readProgressTimerRef.current = null;
+      }
+      if (watchProgressTimerRef.current !== null) {
+        window.clearInterval(watchProgressTimerRef.current);
+        watchProgressTimerRef.current = null;
+      }
       setIsVisible(true);
       setIsLoading(false);
       setWatchCostMinutes(WATCH_COST_MIN);
@@ -284,18 +374,24 @@ function OverlayApp() {
       claimDeadlineRef.current = null;
       transcriptLoggedRef.current = null;
     }
-  }, [videoId]);
+  }, [videoId, emitWatchEnded]);
 
   useEffect(() => {
     if (!summary) {
       setClaimSecondsRemaining(0);
       claimDeadlineRef.current = null;
+      readProgressSecondsRef.current = 0;
+      if (readProgressTimerRef.current !== null) {
+        window.clearInterval(readProgressTimerRef.current);
+        readProgressTimerRef.current = null;
+      }
       return;
     }
     const seconds = estimateSummaryReadSeconds(summary);
     const deadline = Date.now() + seconds * 1000;
     claimDeadlineRef.current = deadline;
     setClaimSecondsRemaining(seconds);
+    summaryShownAtRef.current = Date.now();
     if (seconds === 0) return;
 
     const intervalId = window.setInterval(() => {
@@ -310,6 +406,25 @@ function OverlayApp() {
 
     return () => window.clearInterval(intervalId);
   }, [summary]);
+
+  useEffect(() => {
+    if (!summary || hasClaimedRewards || !session) return;
+    if (readProgressTimerRef.current !== null) return;
+    readProgressTimerRef.current = window.setInterval(() => {
+      if (!summary || hasClaimedRewards) return;
+      readProgressSecondsRef.current += Math.round(READ_PROGRESS_INTERVAL_MS / 1000);
+      void streamEvent('read_progress', {
+        read_seconds_total: readProgressSecondsRef.current
+      });
+    }, READ_PROGRESS_INTERVAL_MS);
+
+    return () => {
+      if (readProgressTimerRef.current !== null) {
+        window.clearInterval(readProgressTimerRef.current);
+        readProgressTimerRef.current = null;
+      }
+    };
+  }, [summary, hasClaimedRewards, streamEvent, session]);
 
   useEffect(() => {
     if (!isVisible || !videoId) return;
@@ -446,6 +561,7 @@ function OverlayApp() {
   const sendEvent = useCallback(
     async (type: string, data?: Record<string, unknown>) => {
       if (!session) return null;
+      void streamEvent(type, data);
       const supabaseEvent = await applyEventWithSupabase(type, data);
       if (supabaseEvent.ok) {
         return supabaseEvent.data ?? null;
@@ -463,7 +579,7 @@ function OverlayApp() {
       }
       return response.body ?? null;
     },
-    [session, applyEventWithSupabase, requestFromBackground]
+    [session, applyEventWithSupabase, requestFromBackground, streamEvent]
   );
 
   useEffect(() => {
@@ -584,6 +700,11 @@ function OverlayApp() {
 
   useEffect(() => {
     if (!isVisible) return;
+    emitIntentPanelShown();
+  }, [isVisible, emitIntentPanelShown]);
+
+  useEffect(() => {
+    if (!isVisible) return;
     let currentVideo: HTMLVideoElement | null = null;
 
     const handlePlay = () => {
@@ -620,6 +741,77 @@ function OverlayApp() {
     };
   }, [isVisible, videoId]);
 
+  useEffect(() => {
+    if (isVisible || !watchTrackingRef.current || !videoId) return;
+    let video: HTMLVideoElement | null = document.querySelector('video');
+    let stopped = false;
+
+    const ensureVideo = () => {
+      if (!video || !document.contains(video)) {
+        video = document.querySelector('video');
+      }
+    };
+
+    const sampleWatchProgress = () => {
+      if (stopped) return;
+      ensureVideo();
+      if (!video || !Number.isFinite(video.currentTime)) return;
+      const currentSeconds = Math.max(0, video.currentTime);
+      const delta = currentSeconds - watchProgressLastSecondsRef.current;
+      if (delta >= 1) {
+        watchProgressLastSecondsRef.current = currentSeconds;
+        watchProgressSampleRef.current += 1;
+        void streamEvent('watch_progress', {
+          watch_seconds_total: Math.round(currentSeconds),
+          watch_seconds_delta: Math.round(delta),
+          sample_index: watchProgressSampleRef.current
+        });
+      }
+    };
+
+    const handleEnded = () => {
+      emitWatchEnded('video_end');
+      watchTrackingRef.current = false;
+      if (watchProgressTimerRef.current !== null) {
+        window.clearInterval(watchProgressTimerRef.current);
+        watchProgressTimerRef.current = null;
+      }
+      stopped = true;
+    };
+
+    const handlePause = () => {
+      if (video?.ended) return;
+      emitWatchEnded('paused');
+      watchTrackingRef.current = false;
+      if (watchProgressTimerRef.current !== null) {
+        window.clearInterval(watchProgressTimerRef.current);
+        watchProgressTimerRef.current = null;
+      }
+      stopped = true;
+    };
+
+    ensureVideo();
+    if (video) {
+      watchProgressLastSecondsRef.current = Math.max(0, video.currentTime || 0);
+      video.addEventListener('ended', handleEnded);
+      video.addEventListener('pause', handlePause);
+    }
+
+    watchProgressTimerRef.current = window.setInterval(sampleWatchProgress, WATCH_PROGRESS_INTERVAL_MS);
+
+    return () => {
+      stopped = true;
+      if (watchProgressTimerRef.current !== null) {
+        window.clearInterval(watchProgressTimerRef.current);
+        watchProgressTimerRef.current = null;
+      }
+      if (video) {
+        video.removeEventListener('ended', handleEnded);
+        video.removeEventListener('pause', handlePause);
+      }
+    };
+  }, [isVisible, videoId, streamEvent, emitWatchEnded]);
+
   const handleWatchNow = useCallback(async () => {
     if (!session) return;
     setIsVisible(false);
@@ -627,8 +819,12 @@ function OverlayApp() {
     const updated = await sendEvent('watch_initiated', {
       minutes: watchCostMinutes,
       videoId,
-      score: watchScorePenalty
+      score: watchScorePenalty,
+      time_since_open_ms: Math.max(0, Date.now() - sessionStartRef.current)
     });
+    watchTrackingRef.current = true;
+    watchStartAtRef.current = Date.now();
+    watchEndedRef.current = false;
     if (updated) {
       setMetrics({
         level: updated.level,
@@ -649,6 +845,14 @@ function OverlayApp() {
     const title = getVideoTitle();
     const durationSeconds = getVideoDurationSeconds();
 
+    void streamEvent('summary_requested', {
+      videoId,
+      title,
+      durationSeconds,
+      time_since_open_ms: Math.max(0, Date.now() - sessionStartRef.current)
+    });
+    summaryRequestedAtRef.current = Date.now();
+
     const summaryResponse = await requestFromBackground<SummaryData>(`${API_BASE_URL}/summarize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -661,7 +865,27 @@ function OverlayApp() {
 
     if (summaryResponse.ok && summaryResponse.body?.summary) {
       setSummary(summaryResponse.body);
+      summaryShownAtRef.current = Date.now();
+      void streamEvent('summary_generated', {
+        videoId,
+        latency_ms: summaryRequestedAtRef.current
+          ? Math.max(0, Date.now() - summaryRequestedAtRef.current)
+          : null,
+        readingTimeMinutes: summaryResponse.body.readingTimeMinutes,
+        summaryLength: summaryResponse.body.summary.length,
+        keyPointCount: summaryResponse.body.keyPoints?.length ?? 0,
+        source: summaryResponse.body.source,
+        language: summaryResponse.body.language
+      });
     } else {
+      void streamEvent('summary_failed', {
+        videoId,
+        latency_ms: summaryRequestedAtRef.current
+          ? Math.max(0, Date.now() - summaryRequestedAtRef.current)
+          : null,
+        status: summaryResponse.status,
+        error: summaryResponse.error
+      });
       console.warn('[Intent] Summary unavailable', {
         videoId,
         status: summaryResponse.status,
@@ -670,15 +894,19 @@ function OverlayApp() {
       });
     }
     setIsLoading(false);
-  }, [videoId, session, requestFromBackground]);
+  }, [videoId, session, requestFromBackground, streamEvent]);
 
   const handleClaimRewards = useCallback(async () => {
     if (!session || !summary || isClaimingRewards || hasClaimedRewards || claimSecondsRemaining > 0) return;
     setIsClaimingRewards(true);
+    const readTimeMs = summaryShownAtRef.current
+      ? Math.max(0, Date.now() - summaryShownAtRef.current)
+      : null;
     const updated = await sendEvent('read_completed', {
       videoId,
       minutes: readGainMinutes,
-      score: readScoreGain
+      score: readScoreGain,
+      read_time_ms: readTimeMs
     });
     if (updated) {
       setMetrics({
