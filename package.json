@@ -8,7 +8,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "dev:server": "tsx server/index.ts",
-    "start:server": "node --loader tsx server/index.ts"
+    "start:server": "node --loader tsx server/index.ts",
+    "dev:consumer": "tsx server/consumer.ts",
+    "start:consumer": "node --loader tsx server/consumer.ts",
+    "dev:scorer": "tsx server/risk-scorer.ts",
+    "start:scorer": "node --loader tsx server/risk-scorer.ts"
   },
   "dependencies": {
     "@google-cloud/vertexai": "^1.10.0",

@@ -37,6 +37,10 @@ export default defineConfig(({ mode }) => {
       default_title: 'Intent',
       default_popup: 'popup.html'
     },
+    options_ui: {
+      page: 'settings.html',
+      open_in_tab: true
+    },
     background: {
       service_worker: 'src/background.ts',
       type: 'module'
@@ -56,7 +60,8 @@ export default defineConfig(({ mode }) => {
         input: {
           main: 'index.html',
           auth: 'auth.html',
-          popup: 'popup.html'
+          popup: 'popup.html',
+          settings: 'settings.html'
         }
       }
     }

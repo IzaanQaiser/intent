@@ -22,51 +22,73 @@ body {
   color: var(--ink);
 }
 
-.popup {
-  min-width: 240px;
-  padding: 18px 18px 16px;
-  margin: 10px;
+.settings {
+  min-height: 100vh;
+  padding: clamp(20px, 4vw, 40px);
+}
+
+.settings__header h1 {
+  font-family: "Fraunces", "Times New Roman", serif;
+  font-size: clamp(1.8rem, 3vw, 2.6rem);
+  margin: 0 0 8px;
+}
+
+.settings__header p {
+  margin: 0 0 24px;
+  color: var(--ink-soft);
+  max-width: 520px;
+  line-height: 1.5;
+}
+
+.settings__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.settings__card {
   background: linear-gradient(180deg, #fff8ef 0%, #f7ecdf 100%);
   border-radius: 18px;
   border: 1px solid var(--border);
+  padding: 18px;
   box-shadow: var(--shadow);
-}
-
-.popup__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.popup__title {
-  font-family: "Fraunces", "Times New Roman", serif;
-  font-weight: 700;
-  font-size: 18px;
-}
-
-.popup__gear {
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.7);
-  border-radius: 12px;
-  width: 34px;
-  height: 34px;
-  font-size: 16px;
-  cursor: pointer;
-  color: var(--ink);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.popup__actions {
   display: grid;
   gap: 10px;
 }
 
-.popup__button {
-  width: 100%;
+.settings__card h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.settings__card p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
+
+.settings__status {
+  font-weight: 600;
+}
+
+.settings__meta {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.settings__badge {
+  align-self: start;
+  justify-self: start;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(123, 191, 150, 0.2);
+  color: #2f6a4a;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.settings__button {
+  margin-top: 6px;
   border: none;
   border-radius: 999px;
   padding: 10px 12px;
@@ -78,16 +100,15 @@ body {
   box-shadow: 0 10px 20px rgba(42, 33, 26, 0.2);
 }
 
-.popup__button--secondary {
-  background: var(--ink);
-  color: #fff7ee;
-}
-
-.popup__button:hover {
+.settings__button:hover {
   transform: translateY(-1px);
 }
 
-.popup__button:disabled {
+.settings__button--secondary {
+  background: var(--accent);
+}
+
+.settings__button:disabled {
   background: #7b7067;
   cursor: default;
   box-shadow: none;

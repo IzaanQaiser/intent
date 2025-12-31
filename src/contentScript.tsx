@@ -118,6 +118,11 @@ function getReadScoreGain(watchCostMinutes: number) {
   return Math.round((watchCostMinutes * 2) / 10) * 10;
 }
 
+function normalizeWhole(value: number) {
+  if (!Number.isFinite(value) || value === 0) return 0;
+  return value > 0 ? Math.ceil(value) : -Math.ceil(Math.abs(value));
+}
+
 function getRoundedMinutesFromDuration(durationSeconds: number | null) {
   if (!durationSeconds || !Number.isFinite(durationSeconds)) {
     return WATCH_COST_MIN;
@@ -529,6 +534,9 @@ function OverlayApp() {
           return { ok: true, data: null } as const;
       }
 
+      deltaScore = normalizeWhole(deltaScore);
+      deltaMinutes = normalizeWhole(deltaMinutes);
+
       const currentState = await getStateRowFromSupabase();
       if (!currentState.ok || !currentState.data) {
         return { ok: false, error: currentState.error || 'Unable to load state.' } as const;
@@ -562,10 +570,6 @@ function OverlayApp() {
     async (type: string, data?: Record<string, unknown>) => {
       if (!session) return null;
       void streamEvent(type, data);
-      const supabaseEvent = await applyEventWithSupabase(type, data);
-      if (supabaseEvent.ok) {
-        return supabaseEvent.data ?? null;
-      }
       const response = await requestFromBackground<Metrics>(`${API_BASE_URL}/event`, {
         method: 'POST',
         headers: {
@@ -574,10 +578,19 @@ function OverlayApp() {
         },
         body: JSON.stringify({ type, data })
       });
-      if (!response.ok) {
-        return null;
+      if (response.ok && response.body) {
+        return response.body;
       }
-      return response.body ?? null;
+      const supabaseEvent = await applyEventWithSupabase(type, data);
+      if (supabaseEvent.ok) {
+        return supabaseEvent.data ?? null;
+      }
+      console.warn('[Intent] Failed to persist event', {
+        type,
+        apiError: response.ok ? null : response.error || response.status,
+        supabaseError: supabaseEvent.error
+      });
+      return null;
     },
     [session, applyEventWithSupabase, requestFromBackground, streamEvent]
   );

@@ -11,19 +11,35 @@ const container = document.createElement('div');
 container.className = 'popup';
 root.appendChild(container);
 
+const header = document.createElement('div');
+header.className = 'popup__header';
+container.appendChild(header);
+
 const title = document.createElement('div');
 title.className = 'popup__title';
 title.textContent = 'Intent';
-container.appendChild(title);
+header.appendChild(title);
 
-const status = document.createElement('div');
-status.className = 'popup__status';
-container.appendChild(status);
+const settingsButton = document.createElement('button');
+settingsButton.className = 'popup__gear';
+settingsButton.type = 'button';
+settingsButton.textContent = '⚙';
+header.appendChild(settingsButton);
+
+const actions = document.createElement('div');
+actions.className = 'popup__actions';
+container.appendChild(actions);
+
+const dashboardButton = document.createElement('button');
+dashboardButton.className = 'popup__button popup__button--secondary';
+dashboardButton.type = 'button';
+dashboardButton.textContent = 'My Dashboard';
+actions.appendChild(dashboardButton);
 
 const button = document.createElement('button');
 button.className = 'popup__button';
 button.type = 'button';
-container.appendChild(button);
+actions.appendChild(button);
 
 async function clearLocalSession() {
   const storageKey = (supabase?.auth as { storageKey?: string } | undefined)?.storageKey;
@@ -38,7 +54,6 @@ async function clearLocalSession() {
 
 async function refresh() {
   if (!supabase) {
-    status.textContent = 'Missing Supabase configuration.';
     button.textContent = 'Unavailable';
     button.disabled = true;
     return;
@@ -46,11 +61,9 @@ async function refresh() {
 
   const { data } = await supabase.auth.getSession();
   if (data.session) {
-    status.textContent = 'Signed in.';
     button.textContent = 'Log out';
     button.disabled = false;
   } else {
-    status.textContent = 'Not signed in.';
     button.textContent = 'Sign in in-page';
     button.disabled = true;
   }
@@ -68,5 +81,18 @@ button.addEventListener('click', async () => {
   } catch {}
   await refresh();
 });
+
+const openExtensionPage = (page: string) => {
+  const url = chrome.runtime?.getURL(page);
+  if (!url) return;
+  try {
+    chrome.tabs?.create({ url });
+  } catch {
+    window.open(url, '_blank');
+  }
+};
+
+dashboardButton.addEventListener('click', () => openExtensionPage('index.html'));
+settingsButton.addEventListener('click', () => openExtensionPage('settings.html'));
 
 void refresh();

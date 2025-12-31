@@ -32,6 +32,10 @@ const WATCH_COST_MIN = 10;
 const SCORE_PENALTY = 10;
 
 const computeLevel = (readScore: number) => Math.floor(readScore / 400) + 1;
+const normalizeWhole = (value: number) => {
+  if (!Number.isFinite(value) || value === 0) return 0;
+  return value > 0 ? Math.ceil(value) : -Math.ceil(Math.abs(value));
+};
 const TRANSCRIPT_SCRIPT = path.resolve(process.cwd(), 'scripts', 'transcriptgrab.py');
 const VERTEX_PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT;
 const VERTEX_LOCATION = process.env.VERTEX_LOCATION || 'us-central1';
@@ -51,6 +55,8 @@ const EVENT_HASH_SALT = process.env.EVENT_HASH_SALT || 'intent';
 const CONFLUENT_ENABLED = Boolean(
   CONFLUENT_BOOTSTRAP_SERVERS && CONFLUENT_API_KEY && CONFLUENT_API_SECRET
 );
+const USER_HASH_TABLE = 'user_hash_map';
+const ACTION_EVENTS_TABLE = 'action_events';
 
 let confluentProducer: ReturnType<Kafka['producer']> | null = null;
 
@@ -146,6 +152,15 @@ type StreamEvent = {
 
 function hashUserId(userId: string) {
   return createHmac('sha256', EVENT_HASH_SALT).update(userId).digest('hex');
+}
+
+async function upsertUserHashMap(userIdRaw: string, hashedUserId: string) {
+  const { error } = await supabase
+    .from(USER_HASH_TABLE)
+    .upsert({ user_id: hashedUserId, user_id_raw: userIdRaw }, { onConflict: 'user_id' });
+  if (error) {
+    console.warn('[stream] Failed to upsert user hash map', error.message);
+  }
 }
 
 async function getConfluentProducer() {
@@ -406,8 +421,10 @@ async function getOrCreateState(userId: string) {
 
 async function updateState(userId: string, deltaScore: number, deltaMinutes: number) {
   const state = await getOrCreateState(userId);
-  const nextScore = state.readScore + deltaScore;
-  const nextBalance = state.watchBalanceMinutes + deltaMinutes;
+  const normalizedScore = normalizeWhole(deltaScore);
+  const normalizedMinutes = normalizeWhole(deltaMinutes);
+  const nextScore = state.readScore + normalizedScore;
+  const nextBalance = state.watchBalanceMinutes + normalizedMinutes;
 
   const { error } = await supabase
     .from('user_state')
@@ -426,6 +443,19 @@ async function updateState(userId: string, deltaScore: number, deltaMinutes: num
     watchBalanceMinutes: nextBalance,
     level: computeLevel(nextScore)
   };
+}
+
+async function logActionEvent(userId: string, type: string, data?: Record<string, unknown>) {
+  if (type !== 'read_completed' && type !== 'watch_initiated') return;
+  const { error } = await supabase.from(ACTION_EVENTS_TABLE).insert({
+    user_id_raw: userId,
+    event_type: type,
+    occurred_at: new Date().toISOString(),
+    metadata: data ?? {}
+  });
+  if (error) {
+    console.warn('[event] Failed to log action event', error.message);
+  }
 }
 
 app.get('/health', (_req, res) => {
@@ -472,6 +502,7 @@ app.post('/stream', async (req, res) => {
       return;
     }
     const userId = authData.user.id;
+    const hashedUserId = hashUserId(userId);
     const { type, videoId, sessionId, data, context } = req.body || {};
     if (!type) {
       res.status(400).json({ error: 'Missing type' });
@@ -482,7 +513,7 @@ app.post('/stream', async (req, res) => {
       event_id: randomUUID(),
       event_type: String(type),
       timestamp: new Date().toISOString(),
-      user_id: hashUserId(userId),
+      user_id: hashedUserId,
       session_id: typeof sessionId === 'string' ? sessionId : undefined,
       video_id: typeof videoId === 'string' ? videoId : undefined,
       data: data && typeof data === 'object' ? data : undefined,
@@ -490,6 +521,7 @@ app.post('/stream', async (req, res) => {
     };
 
     try {
+      await upsertUserHashMap(userId, hashedUserId);
       const result = await publishStreamEvent(event);
       if (result.ok || result.skipped) {
         res.json({ ok: true, streamed: result.ok });
@@ -520,6 +552,7 @@ app.post('/event', async (req, res) => {
       return;
     }
     const userId = authData.user.id;
+    const hashedUserId = hashUserId(userId);
     const { type, data } = req.body || {};
     if (!type) {
       res.status(400).json({ error: 'Missing type' });
@@ -555,7 +588,9 @@ app.post('/event', async (req, res) => {
         break;
     }
 
+    await upsertUserHashMap(userId, hashedUserId);
     const updated = await updateState(userId, deltaScore, deltaMinutes);
+    await logActionEvent(userId, String(type), data);
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: String(error) });

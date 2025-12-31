@@ -1,6 +1,6 @@
 {
   "../../../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-BGhKsL3L.js",
+    "file": "assets/crx-manifest.js-DnKhpOQW.js",
     "name": "crx-manifest.js",
     "src": "../../../../../@crx/manifest",
     "isEntry": true
@@ -28,24 +28,25 @@
     ]
   },
   "contentScript.tsx-loader.js": {
-    "file": "assets/contentScript.tsx-loader-CrBW-1A0.js",
+    "file": "assets/contentScript.tsx-loader-C_eNaKix.js",
     "src": "contentScript.tsx-loader.js"
   },
   "index.html": {
-    "file": "assets/main-BxZbMrPj.js",
+    "file": "assets/main-DPjjGztd.js",
     "name": "main",
     "src": "index.html",
     "isEntry": true,
     "imports": [
       "_modulepreload-polyfill-B5Qt9EMX.js",
-      "_client-DMp2t5-j.js"
+      "_client-DMp2t5-j.js",
+      "_supabaseClient-DihBYOwf.js"
     ],
     "css": [
-      "assets/main-D6MC-h_p.css"
+      "assets/main-BY65wBbN.css"
     ]
   },
   "popup.html": {
-    "file": "assets/popup-BY2WfEhu.js",
+    "file": "assets/popup-BIKHAZ-b.js",
     "name": "popup",
     "src": "popup.html",
     "isEntry": true,
@@ -54,7 +55,20 @@
       "_supabaseClient-DihBYOwf.js"
     ],
     "css": [
-      "assets/popup-C7nCNhwQ.css"
+      "assets/popup-DO-yOrZc.css"
+    ]
+  },
+  "settings.html": {
+    "file": "assets/settings-fq0wiXZF.js",
+    "name": "settings",
+    "src": "settings.html",
+    "isEntry": true,
+    "imports": [
+      "_modulepreload-polyfill-B5Qt9EMX.js",
+      "_supabaseClient-DihBYOwf.js"
+    ],
+    "css": [
+      "assets/settings-BjSgf3Tl.css"
     ]
   },
   "src/background.ts": {
@@ -64,7 +78,7 @@
     "isEntry": true
   },
   "src/contentScript.tsx": {
-    "file": "assets/contentScript.tsx-Cy8Kempr.js",
+    "file": "assets/contentScript.tsx-BBUlWRuI.js",
     "name": "contentScript.tsx",
     "src": "src/contentScript.tsx",
     "isEntry": true,
