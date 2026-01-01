@@ -24,6 +24,11 @@ export default defineConfig(({ mode }) => {
     name: 'Intent',
     version: '0.0.1',
     description: 'Read-first YouTube summaries with attention-aware feedback.',
+    icons: {
+      '16': 'icons/icon-16.png',
+      '48': 'icons/icon-48.png',
+      '128': 'icons/icon-128.png'
+    },
     permissions: ['storage', 'identity'],
     host_permissions: Array.from(hostPermissions),
     content_scripts: [

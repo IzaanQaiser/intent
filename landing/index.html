@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Intent Extension</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #0b1021;
+        --muted: #475569;
+        --accent: #e6b566;
+        --accent-2: #cf7b5a;
+        --panel: #ffffff;
+        --line: rgba(15, 23, 42, 0.12);
+        --shadow: 0 26px 60px rgba(15, 23, 42, 0.15);
+        --radius: 24px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Space Grotesk", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(230, 181, 102, 0.28), transparent 55%),
+          radial-gradient(circle at 20% 20%, rgba(207, 123, 90, 0.18), transparent 45%),
+          linear-gradient(135deg, #f7f2ea 0%, #f0f4ff 52%, #eef1f8 100%);
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background-image: linear-gradient(rgba(15, 23, 42, 0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(15, 23, 42, 0.05) 1px, transparent 1px);
+        background-size: 60px 60px;
+        pointer-events: none;
+        opacity: 0.35;
+      }
+
+      .shell {
+        position: relative;
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 64px 24px 56px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 24px;
+        padding: 40px;
+        border-radius: var(--radius);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        width: 220px;
+        height: 220px;
+        right: -60px;
+        top: -90px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(230, 181, 102, 0.45), transparent 70%);
+        animation: float 8s ease-in-out infinite;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .badge::before {
+        content: "";
+        width: 34px;
+        height: 2px;
+        background: var(--accent-2);
+      }
+
+      h1 {
+        margin: 0;
+        font-family: "Playfair Display", "Times New Roman", serif;
+        font-size: clamp(40px, 6vw, 64px);
+        letter-spacing: 0.02em;
+      }
+
+      .lede {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.6;
+        color: var(--muted);
+        max-width: 640px;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 14px 22px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        font-weight: 600;
+        text-decoration: none;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .btn.primary {
+        background: linear-gradient(135deg, #0f172a, #1f2937);
+        color: #f8fafc;
+        box-shadow: 0 18px 35px rgba(15, 23, 42, 0.25);
+      }
+
+      .btn.secondary {
+        background: #fff7ed;
+        color: #9a3412;
+        border-color: rgba(154, 52, 18, 0.2);
+      }
+
+      .btn.disabled {
+        background: rgba(148, 163, 184, 0.2);
+        color: #64748b;
+        border-color: rgba(148, 163, 184, 0.4);
+        pointer-events: none;
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+      }
+
+      .meta {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        gap: 18px;
+        margin-top: 24px;
+      }
+
+      .card,
+      .panel {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 22px 24px;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+      }
+
+      .card h2,
+      .panel h3 {
+        margin: 0 0 12px;
+        font-family: "Playfair Display", "Times New Roman", serif;
+      }
+
+      ol {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--muted);
+      }
+
+      li {
+        margin-bottom: 10px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.08);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+
+      @media (min-width: 860px) {
+        .grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @keyframes float {
+        0% {
+          transform: translate3d(0, 0, 0);
+        }
+        50% {
+          transform: translate3d(-14px, 16px, 0);
+        }
+        100% {
+          transform: translate3d(0, 0, 0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div class="badge">Chrome Extension</div>
+        <h1>Intent</h1>
+        <p class="lede">
+          Read-first YouTube summaries with attention-aware feedback. For hackathon review: download the
+          temporary ZIP or check back for the Chrome Web Store link once approved.
+        </p>
+        <div class="actions">
+          <a class="btn primary" href="intent-extension.zip">Download ZIP (temporary)</a>
+          <a class="btn secondary" href="#install">Install instructions</a>
+          <a class="btn disabled" href="#" aria-disabled="true">Chrome Web Store (pending)</a>
+        </div>
+        <div class="meta">Status: Pending review. Replace the store button once approved.</div>
+      </section>
+
+      <section class="card" id="install">
+        <h2>Install the temporary build</h2>
+        <ol>
+          <li>Download the ZIP and unzip it.</li>
+          <li>Open <strong>chrome://extensions</strong> and enable Developer mode.</li>
+          <li>Click <strong>Load unpacked</strong> and select the unzipped folder.</li>
+          <li>Pin the extension and open YouTube to try it.</li>
+        </ol>
+      </section>
+
+      <section class="grid">
+        <div class="panel">
+          <span class="pill">Services</span>
+          <h3>Live integrations</h3>
+          <p class="lede">
+            Uses Supabase for auth + sync and a live API for summaries and scoring. Production endpoints
+            are already wired into this build.
+          </p>
+        </div>
+        <div class="panel">
+          <span class="pill">Privacy</span>
+          <h3>Minimal data footprint</h3>
+          <p class="lede">
+            Stores only what is needed to track read/watch balance and generate summaries. No remote code
+            execution, no unnecessary tracking.
+          </p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

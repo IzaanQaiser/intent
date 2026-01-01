@@ -47,17 +47,22 @@ type FeatureWindowRow = {
 type FeatureSnapshot = {
   video_opened_count: number;
   summary_generated_count: number;
+  summary_generated_rate: number;
   avg_summary_latency_ms: number | null;
   read_completed_count: number;
+  read_completion_rate: number;
   avg_read_time_ms: number | null;
   watch_initiated_count: number;
+  watch_initiated_rate: number;
   watch_ended_count: number;
+  watch_completion_rate: number;
   watch_seconds_total: number;
   avg_watch_seconds: number;
   avg_time_to_watch_ms: number | null;
   watch_to_read_ratio: number;
   negative_balance_count: number;
   negative_balance_rate: number;
+  total_action_count: number;
 };
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
@@ -93,6 +98,8 @@ function normalizeBulletList(value: unknown): string[] {
 }
 
 function buildFeatureSnapshot(row: FeatureWindowRow): FeatureSnapshot {
+  const videoOpened = row.video_opened_count || 0;
+  const summaryGenerated = row.summary_generated_count || 0;
   const watchInitiated = row.watch_initiated_count || 0;
   const readCompleted = row.read_completed_count || 0;
   const negativeBalance = row.negative_balance_count || 0;
@@ -107,23 +114,35 @@ function buildFeatureSnapshot(row: FeatureWindowRow): FeatureSnapshot {
 
   const watchToReadRatio = watchInitiated / Math.max(1, readCompleted);
   const negativeBalanceRate = negativeBalance / Math.max(1, watchInitiated);
+  const summaryGeneratedRate = summaryGenerated / Math.max(1, videoOpened);
+  const readCompletionDenom = summaryGenerated > 0 ? summaryGenerated : Math.max(1, videoOpened);
+  const readCompletionRate = readCompleted / readCompletionDenom;
+  const watchInitiatedRate = watchInitiated / Math.max(1, videoOpened);
+  const watchCompletionRate = watchEnded / Math.max(1, watchInitiated);
   const avgWatchSeconds = watchSecondsTotal / Math.max(1, watchEnded || watchInitiated);
+  const totalActionCount =
+    videoOpened + summaryGenerated + readCompleted + watchInitiated + watchEnded;
 
   return {
-    video_opened_count: row.video_opened_count || 0,
-    summary_generated_count: row.summary_generated_count || 0,
+    video_opened_count: videoOpened,
+    summary_generated_count: summaryGenerated,
+    summary_generated_rate: Number(summaryGeneratedRate.toFixed(3)),
     avg_summary_latency_ms:
       summaryLatencyCount > 0 ? summaryLatencyTotal / summaryLatencyCount : null,
     read_completed_count: readCompleted,
+    read_completion_rate: Number(readCompletionRate.toFixed(3)),
     avg_read_time_ms: readTimeCount > 0 ? readTimeTotal / readTimeCount : null,
     watch_initiated_count: watchInitiated,
+    watch_initiated_rate: Number(watchInitiatedRate.toFixed(3)),
     watch_ended_count: watchEnded,
+    watch_completion_rate: Number(watchCompletionRate.toFixed(3)),
     watch_seconds_total: watchSecondsTotal,
     avg_watch_seconds: avgWatchSeconds,
     avg_time_to_watch_ms: timeToWatchCount > 0 ? timeToWatchTotal / timeToWatchCount : null,
     watch_to_read_ratio: watchToReadRatio,
     negative_balance_count: negativeBalance,
-    negative_balance_rate: negativeBalanceRate
+    negative_balance_rate: negativeBalanceRate,
+    total_action_count: totalActionCount
   };
 }
 
@@ -176,12 +195,15 @@ function computeRisk(row: FeatureWindowRow) {
 
 function buildPrompt(snapshot: FeatureSnapshot) {
   return [
-    'You are an attention risk analyst.',
+    'You are an attention coach focused on actionable, user-controlled interventions.',
     'Given the hourly behavior features, estimate relapse risk for the next hour.',
+    'Use the metrics to identify the top weakpoint and a concrete action the user can take.',
+    'Avoid suggestions that require new product features or settings (ex: adding a pause).',
+    'If event volume is low, say data is thin and suggest collecting more sessions.',
     'Return ONLY valid JSON with the following keys:',
     '- risk_score: number between 0 and 1',
-    '- insight_summary: string (1-2 sentences)',
-    '- insight_bullets: array of 3 concise strings',
+    '- insight_summary: string (1-2 sentences, include a metric)',
+    '- insight_bullets: array of 3 concise strings labeled "Evidence:", "Weak point:", "Next step:"',
     '- factors: object with 3 numeric factor scores between 0 and 1',
     '',
     'Feature window JSON:',
@@ -257,15 +279,41 @@ async function scoreWithVertex(snapshot: FeatureSnapshot) {
 }
 
 function buildFallbackInsight(snapshot: FeatureSnapshot, riskScore: number) {
+  const avgTimeToWatch = snapshot.avg_time_to_watch_ms;
+  const avgTimeToWatchLabel =
+    avgTimeToWatch === null ? 'untracked' : `${Math.round(avgTimeToWatch / 1000)}s`;
+  const watchRate = Math.round(snapshot.watch_initiated_rate * 100);
+
+  let weakpoint = 'Engagement is balanced with reads keeping up with watch starts.';
+  let action = 'Keep the read-first routine that is working.';
+
+  if (snapshot.total_action_count < 3) {
+    weakpoint = 'Too few events to isolate a reliable weakpoint.';
+    action = 'Run a few more sessions so insights can calibrate.';
+  } else if (snapshot.watch_to_read_ratio >= 1.4) {
+    weakpoint = 'Watch starts are outpacing reads, which drives attention debt.';
+    action = 'Aim for 1 completed read before every watch to stay positive.';
+  } else if (snapshot.read_completion_rate < 0.4 && snapshot.summary_generated_count > 0) {
+    weakpoint = 'Summaries are opened but not completed, so reads do not convert.';
+    action = 'Finish one summary (2-3 minutes) before choosing Watch Now.';
+  } else if (snapshot.summary_generated_rate < 0.4 && snapshot.video_opened_count > 0) {
+    weakpoint = 'Most opens skip the summary step, limiting intentional choice.';
+    action = 'Generate a summary on at least half of opens to decide before watching.';
+  } else if (avgTimeToWatch !== null && avgTimeToWatch < 15000) {
+    weakpoint = 'You pivot to watching quickly after opening a video.';
+    action = 'Open the summary first when the watch impulse is under 15s.';
+  } else if (snapshot.negative_balance_rate > 0.35) {
+    weakpoint = 'Balance dips often after watch starts.';
+    action = 'Add an extra read after any watch session to restore balance.';
+  }
+
   const bullets = [
-    `Watch-to-read ratio at ${snapshot.watch_to_read_ratio.toFixed(2)}.`,
-    `Negative balance events: ${snapshot.negative_balance_count}.`,
-    snapshot.avg_time_to_watch_ms === null
-      ? 'No watch-to-open timing recorded.'
-      : `Average time to watch: ${Math.round(snapshot.avg_time_to_watch_ms / 1000)}s.`
+    `Evidence: ${snapshot.video_opened_count} opens, ${snapshot.summary_generated_count} summaries, ${snapshot.read_completed_count} reads, ${snapshot.watch_initiated_count} watches (${watchRate}% of opens).`,
+    `Weak point: ${weakpoint}`,
+    `Next step: ${action}`
   ];
   return {
-    insightSummary: `Heuristic risk score ${riskScore.toFixed(2)} based on recent watch vs read behavior.`,
+    insightSummary: `Risk score ${riskScore.toFixed(2)} with watch-to-read ratio at ${snapshot.watch_to_read_ratio.toFixed(2)} and average time to watch ${avgTimeToWatchLabel}.`,
     insightBullets: bullets
   };
 }
